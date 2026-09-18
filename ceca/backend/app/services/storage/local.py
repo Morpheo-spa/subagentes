@@ -9,15 +9,16 @@ from pathlib import Path
 from app.errors import DomainError
 from app.models.storage import StorageBackend, StorageKind
 from app.services.storage.base import CHUNK_SIZE, normalise_key, register
-
-DEFAULT_BASE_PATH = "/var/lib/estampa/documents"
+from app.services.storage.validation import validate_base_path
 
 
 @register(StorageKind.LOCAL)
 class LocalStorage:
     def __init__(self, backend: StorageBackend) -> None:
         self._name = backend.name
-        self._root = Path(backend.config.get("base_path") or DEFAULT_BASE_PATH)
+        # Confined to the deployment's storage root, so a tenant cannot write
+        # elsewhere, nor archive outside the volume that survives a restart.
+        self._root = Path(validate_base_path(backend.config.get("base_path")))
 
     def _path(self, key: str) -> Path:
         return self._root / normalise_key(key)

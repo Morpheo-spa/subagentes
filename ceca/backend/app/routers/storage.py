@@ -24,6 +24,7 @@ from app.schemas.storage import (
 from app.security import encrypt_secret
 from app.services import audit as audit_service
 from app.services import storage as storage_service
+from app.services.storage.validation import validate_config
 
 router = APIRouter(prefix="/storage", tags=["storage"])
 
@@ -97,7 +98,7 @@ async def create_backend(
         site_id=ctx.site_id,
         name=payload.name,
         kind=payload.kind,
-        config=payload.config,
+        config=validate_config(payload.kind.value, payload.config),
         config_encrypted=(encrypt_secret(json.dumps(payload.secrets)) if payload.secrets else None),
         is_default=payload.is_default,
         is_active=payload.is_active,
@@ -128,6 +129,9 @@ async def update_backend(
         raise ConflictError("VERSION_CONFLICT")
 
     changes = payload.model_dump(exclude_unset=True, exclude={"version", "secrets"})
+    if "config" in changes and changes["config"] is not None:
+        # The kind cannot change, so the stored one decides how to read the config.
+        changes["config"] = validate_config(backend.kind.value, changes["config"])
     for field, value in changes.items():
         setattr(backend, field, value)
     if payload.secrets is not None:

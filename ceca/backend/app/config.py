@@ -40,6 +40,15 @@ class Settings(BaseSettings):
         description="Salt for hashing visitor IPs in the public access log.",
     )
 
+    # --- Storage ------------------------------------------------------------
+    #: The only directory the local adapter may write into. A tenant's base_path
+    #: is resolved inside it, so nobody can archive outside the persistent volume.
+    local_storage_root: str = "/var/lib/estampa/storage"
+    #: Lets a tenant point an S3 endpoint at a private address. Needed for a
+    #: local MinIO or an on-premise Garage; a public deployment must leave it
+    #: off, or a customer can aim our client at the cloud metadata service.
+    allow_private_storage_endpoints: bool = False
+
     # --- Uploads ------------------------------------------------------------
     # The Resolution of 5 June 2026 caps a DeCA file at 5 MB. See docs/DECA.md.
     max_upload_mb: int = 5

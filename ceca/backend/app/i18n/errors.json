@@ -236,6 +236,34 @@
     "CROSS_ORIGIN_REJECTED": {
       "es": "Petición rechazada por venir de otro origen.",
       "en": "Request rejected because it came from another origin."
+    },
+    "STORAGE_ENDPOINT_INVALID": {
+      "es": "La dirección «{url}» no es una URL válida.",
+      "en": "\"{url}\" is not a valid URL."
+    },
+    "STORAGE_ENDPOINT_SCHEME_INVALID": {
+      "es": "El esquema «{scheme}» no está permitido. Usa http o https.",
+      "en": "Scheme \"{scheme}\" is not allowed. Use http or https."
+    },
+    "STORAGE_ENDPOINT_PORT_INVALID": {
+      "es": "El puerto {port} no está permitido para un almacenamiento.",
+      "en": "Port {port} is not allowed for a storage endpoint."
+    },
+    "STORAGE_ENDPOINT_NOT_PUBLIC": {
+      "es": "«{host}» apunta a una dirección interna. El almacenamiento debe estar en una dirección pública.",
+      "en": "\"{host}\" resolves to an internal address. Storage must be on a public address."
+    },
+    "STORAGE_ENDPOINT_UNRESOLVABLE": {
+      "es": "No se puede resolver el nombre «{host}».",
+      "en": "The host \"{host}\" cannot be resolved."
+    },
+    "STORAGE_BASE_PATH_OUTSIDE_ROOT": {
+      "es": "La ruta «{base_path}» queda fuera del almacenamiento permitido.",
+      "en": "The path \"{base_path}\" falls outside the permitted storage root."
+    },
+    "STORAGE_CREDENTIALS_REQUIRED": {
+      "es": "Este almacenamiento necesita credenciales explícitas.",
+      "en": "This storage backend requires explicit credentials."
     }
   }
 }

@@ -13,16 +13,37 @@ from app.services.storage.base import (
     normalise_key,
     register,
 )
+from app.services.storage.validation import validate_endpoint_url
 
 
 def _session(credentials: dict[str, Any]) -> Any:
+    """Build a session that can only ever use the tenant's own credentials.
+
+    Passing None for a key makes botocore walk its credential chain, which ends
+    at the instance metadata service. A tenant who simply omits the secrets
+    would then have our requests signed with the host role, and a matching
+    endpoint_url would post that signature straight to them. So the keys are
+    required, and the metadata lookup is switched off besides.
+    """
     import aioboto3
 
+    access_key = credentials.get("access_key_id")
+    secret_key = credentials.get("secret_access_key")
+    if not access_key or not secret_key:
+        raise DomainError("STORAGE_CREDENTIALS_REQUIRED")
+
     return aioboto3.Session(
-        aws_access_key_id=credentials.get("access_key_id"),
-        aws_secret_access_key=credentials.get("secret_access_key"),
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
         aws_session_token=credentials.get("session_token"),
     )
+
+
+def _no_metadata_lookup() -> Any:
+    """Belt and braces: refuse the metadata service even if a key slips through."""
+    from botocore.config import Config
+
+    return Config(retries={"max_attempts": 2}, connect_timeout=5, read_timeout=30)
 
 
 @register(StorageKind.S3)
@@ -32,9 +53,12 @@ class S3Storage:
         self._name = backend.name
         self._bucket = config.get("bucket", "")
         self._prefix = (config.get("prefix") or "").strip("/")
+        # Re-checked here, not only at write time: the row may predate the check,
+        # or have been edited by a path that forgot it.
         self._client_kwargs: dict[str, Any] = {
             "region_name": config.get("region"),
-            "endpoint_url": config.get("endpoint_url"),
+            "endpoint_url": validate_endpoint_url(config.get("endpoint_url")),
+            "config": _no_metadata_lookup(),
         }
         if config.get("force_path_style"):
             self._client_kwargs["config"] = _path_style_config()
