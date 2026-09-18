@@ -49,7 +49,10 @@ RUN useradd --create-home --uid 10001 estampa \
 USER estampa
 
 EXPOSE 8000
+# Liveness only: is the process alive? Readiness (Postgres, Redis, storage)
+# is the compose healthcheck on /health/ready. Never liveness on readiness,
+# or a Redis outage would restart the API in a loop.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://localhost:8000/health || exit 1
+    CMD python -c "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3).status == 200 else 1)"
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
