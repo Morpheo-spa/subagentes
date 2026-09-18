@@ -2,6 +2,11 @@
 # Run `pre-commit install` to set up hooks
 # Run `pre-commit run --all-files` to check all files
 
+# The `ceca/` folder is a standalone SaaS application, not tutorial content.
+# It ships its own quality gate (ceca/scripts/ci.sh: ruff, mypy, bandit, pytest,
+# eslint, vitest), so the tutorial doc/lint hooks below skip it.
+exclude: '^ceca/'
+
 default_language_version:
   python: python3.11
 

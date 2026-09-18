@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+.vite/
+dist/
+*.tsbuildinfo
+npm-debug.log*
+
+# Environment and secrets. Only .env.example is tracked.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local storage backend and uploads
+var/
+storage/
+uploads/
+
+# Editors and OS
+.DS_Store
+.idea/
+*.swp

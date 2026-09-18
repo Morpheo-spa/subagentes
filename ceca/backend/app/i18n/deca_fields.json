@@ -1,0 +1,143 @@
+{
+  "_comment": "DECA field catalogue, seeded into deca_field_definitions. Source: art. 6 Orden FOM/2861/2012, see docs/DECA.md. Bump catalog_version whenever this file changes and add a data migration; never branch on these codes in Python.",
+  "catalog_version": 1,
+  "fields": [
+    {
+      "code": "cargador_nombre",
+      "label_es": "Cargador contractual — nombre o razón social",
+      "label_en": "Contracting shipper — name or company name",
+      "help_es": "Quien contrata el transporte con el transportista efectivo.",
+      "help_en": "The party that contracts the transport with the actual carrier.",
+      "data_type": "string",
+      "is_required": true,
+      "max_length": 160,
+      "legal_reference": "Art. 6.a Orden FOM/2861/2012",
+      "sort_order": 10
+    },
+    {
+      "code": "cargador_nif",
+      "label_es": "Cargador contractual — NIF",
+      "label_en": "Contracting shipper — tax ID",
+      "data_type": "string",
+      "is_required": true,
+      "max_length": 16,
+      "pattern": "^[A-Za-z0-9]{8,16}$",
+      "legal_reference": "Art. 6.a Orden FOM/2861/2012",
+      "sort_order": 20
+    },
+    {
+      "code": "cargador_domicilio",
+      "label_es": "Cargador contractual — domicilio",
+      "label_en": "Contracting shipper — address",
+      "data_type": "text",
+      "is_required": true,
+      "max_length": 255,
+      "legal_reference": "Art. 6.a Orden FOM/2861/2012",
+      "sort_order": 30
+    },
+    {
+      "code": "transportista_nombre",
+      "label_es": "Transportista efectivo — nombre o razón social",
+      "label_en": "Actual carrier — name or company name",
+      "help_es": "Titular de la autorización al amparo de la cual se realiza el transporte.",
+      "help_en": "Holder of the authorisation under which the transport is performed.",
+      "data_type": "string",
+      "is_required": true,
+      "max_length": 160,
+      "legal_reference": "Art. 6.b Orden FOM/2861/2012",
+      "sort_order": 40
+    },
+    {
+      "code": "transportista_nif",
+      "label_es": "Transportista efectivo — NIF",
+      "label_en": "Actual carrier — tax ID",
+      "data_type": "string",
+      "is_required": true,
+      "max_length": 16,
+      "pattern": "^[A-Za-z0-9]{8,16}$",
+      "legal_reference": "Art. 6.b Orden FOM/2861/2012",
+      "sort_order": 50
+    },
+    {
+      "code": "origen",
+      "label_es": "Lugar de origen del envío",
+      "label_en": "Place of origin",
+      "data_type": "string",
+      "is_required": true,
+      "max_length": 255,
+      "legal_reference": "Art. 6.c Orden FOM/2861/2012",
+      "sort_order": 60
+    },
+    {
+      "code": "destino",
+      "label_es": "Lugar de destino del envío",
+      "label_en": "Place of destination",
+      "data_type": "string",
+      "is_required": true,
+      "max_length": 255,
+      "legal_reference": "Art. 6.c Orden FOM/2861/2012",
+      "sort_order": 70
+    },
+    {
+      "code": "mercancia_naturaleza",
+      "label_es": "Naturaleza de la mercancía",
+      "label_en": "Nature of the goods",
+      "data_type": "string",
+      "is_required": true,
+      "max_length": 255,
+      "legal_reference": "Art. 6.d Orden FOM/2861/2012",
+      "sort_order": 80
+    },
+    {
+      "code": "mercancia_peso",
+      "label_es": "Peso de la mercancía",
+      "label_en": "Weight of the goods",
+      "data_type": "decimal",
+      "is_required": true,
+      "legal_reference": "Art. 6.d Orden FOM/2861/2012",
+      "sort_order": 90
+    },
+    {
+      "code": "mercancia_peso_unidad",
+      "label_es": "Unidad de peso",
+      "label_en": "Weight unit",
+      "data_type": "enum",
+      "is_required": true,
+      "choices": ["kg", "t"],
+      "legal_reference": "Art. 6.d Orden FOM/2861/2012",
+      "sort_order": 100
+    },
+    {
+      "code": "fecha_transporte",
+      "label_es": "Fecha de realización del transporte",
+      "label_en": "Date the transport is performed",
+      "data_type": "date",
+      "is_required": true,
+      "legal_reference": "Art. 6.e Orden FOM/2861/2012",
+      "sort_order": 110
+    },
+    {
+      "code": "matricula_vehiculo",
+      "label_es": "Matrícula del vehículo",
+      "label_en": "Vehicle registration plate",
+      "data_type": "string",
+      "is_required": true,
+      "max_length": 16,
+      "pattern": "^[A-Za-z0-9 -]{4,16}$",
+      "legal_reference": "Art. 6.f Orden FOM/2861/2012",
+      "sort_order": 120
+    },
+    {
+      "code": "observaciones",
+      "label_es": "Observaciones o reservas",
+      "label_en": "Remarks or reservations",
+      "help_es": "Indicaciones que las partes consideren útiles. Confianza media sobre su exigibilidad: ver docs/DECA.md.",
+      "help_en": "Notes the parties consider useful. Medium confidence on whether it is required: see docs/DECA.md.",
+      "data_type": "text",
+      "is_required": false,
+      "max_length": 2000,
+      "legal_reference": "Art. 6.g Orden FOM/2861/2012 (pendiente de contrastar)",
+      "sort_order": 130
+    }
+  ]
+}

@@ -1,0 +1,189 @@
+{
+  "_comment": "Every DomainError code the API can raise. ES is the fallback. Params in {braces} are supplied by the service that raises the error. A code without an entry here fails tests/test_i18n.py.",
+  "byCode": {
+    "NOT_AUTHENTICATED": {
+      "es": "No has iniciado sesión o tu sesión ha caducado.",
+      "en": "You are not signed in, or your session has expired."
+    },
+    "TOKEN_EXPIRED": {
+      "es": "Tu sesión ha caducado. Vuelve a entrar.",
+      "en": "Your session has expired. Please sign in again."
+    },
+    "TOKEN_INVALID": {
+      "es": "La sesión no es válida.",
+      "en": "The session is not valid."
+    },
+    "INVALID_CREDENTIALS": {
+      "es": "Email o contraseña incorrectos.",
+      "en": "Incorrect email or password."
+    },
+    "USER_INACTIVE": {
+      "es": "Esta cuenta está desactivada. Contacta con el administrador.",
+      "en": "This account is disabled. Contact your administrator."
+    },
+    "NO_SITE_SELECTED": {
+      "es": "No hay ningún centro seleccionado en la sesión.",
+      "en": "No site is selected for this session."
+    },
+    "SITE_NOT_ALLOWED": {
+      "es": "No tienes acceso al centro {site_id}.",
+      "en": "You do not have access to site {site_id}."
+    },
+    "PERMISSION_DENIED": {
+      "es": "No tienes permiso para realizar esta acción ({permission}).",
+      "en": "You do not have permission for this action ({permission})."
+    },
+    "DOCUMENT_NOT_FOUND": {
+      "es": "El documento no existe.",
+      "en": "The document does not exist."
+    },
+    "DOCUMENT_NOT_PDF": {
+      "es": "«{filename}» no es un PDF. Solo se admiten ficheros PDF.",
+      "en": "\"{filename}\" is not a PDF. Only PDF files are accepted."
+    },
+    "DOCUMENT_TOO_LARGE": {
+      "es": "«{filename}» ocupa {size_mb} MB y el máximo legal del DeCA es {max_mb} MB.",
+      "en": "\"{filename}\" is {size_mb} MB; the DeCA legal maximum is {max_mb} MB."
+    },
+    "DOCUMENT_IS_A_SCAN": {
+      "es": "«{filename}» parece un escaneo o una foto. Un DeCA debe generarse digitalmente a partir de datos, así que este fichero se archiva pero no sirve como documento de control.",
+      "en": "\"{filename}\" looks like a scan or a photo. A DeCA must be generated digitally from data, so this file is archived but cannot serve as a control document."
+    },
+    "DOCUMENT_WITHDRAWN": {
+      "es": "El documento fue retirado el {withdrawn_at} por política de retención.",
+      "en": "The document was withdrawn on {withdrawn_at} under the retention policy."
+    },
+    "DOCUMENT_SUPERSEDED": {
+      "es": "Esta versión fue sustituida por una posterior el {superseded_at}.",
+      "en": "This version was superseded on {superseded_at}."
+    },
+    "DOCUMENT_NOT_READY": {
+      "es": "El documento todavía se está procesando.",
+      "en": "The document is still being processed."
+    },
+    "CHANGE_REASON_REQUIRED": {
+      "es": "Para modificar un DeCA hay que indicar el motivo del cambio.",
+      "en": "Changing a DeCA requires stating the reason for the change."
+    },
+    "DUPLICATE_DOCUMENT": {
+      "es": "Ya existe un documento idéntico, subido el {uploaded_at}.",
+      "en": "An identical document already exists, uploaded on {uploaded_at}."
+    },
+    "TOO_MANY_FILES": {
+      "es": "Has seleccionado {count} ficheros y el máximo por subida es {max_files}.",
+      "en": "You selected {count} files; the maximum per upload is {max_files}."
+    },
+    "DECA_FIELD_REQUIRED": {
+      "es": "Falta el campo obligatorio «{label}».",
+      "en": "The required field \"{label}\" is missing."
+    },
+    "DECA_FIELD_INVALID": {
+      "es": "El campo «{label}» no tiene un formato válido.",
+      "en": "The field \"{label}\" is not in a valid format."
+    },
+    "DECA_NIF_INVALID": {
+      "es": "El NIF/CIF «{value}» no es válido.",
+      "en": "The tax ID \"{value}\" is not valid."
+    },
+    "DECA_PARTIES_NOT_DISTINCT": {
+      "es": "El cargador contractual y el transportista efectivo deben identificarse por separado.",
+      "en": "The contracting shipper and the actual carrier must be identified separately."
+    },
+    "SHARE_TOKEN_UNKNOWN": {
+      "es": "Este enlace no está disponible.",
+      "en": "This link is not available."
+    },
+    "SHARE_ALREADY_REVOKED": {
+      "es": "Este enlace ya estaba revocado.",
+      "en": "This link was already revoked."
+    },
+    "STORAGE_NOT_CONFIGURED": {
+      "es": "El centro no tiene almacenamiento configurado.",
+      "en": "This site has no storage configured."
+    },
+    "STORAGE_KIND_UNAVAILABLE": {
+      "es": "El almacenamiento «{kind}» todavía no está disponible.",
+      "en": "The \"{kind}\" storage backend is not available yet."
+    },
+    "STORAGE_UNREACHABLE": {
+      "es": "No se puede conectar con el almacenamiento «{name}».",
+      "en": "Cannot reach the \"{name}\" storage backend."
+    },
+    "STORAGE_SECRET_UNREADABLE": {
+      "es": "No se pueden descifrar las credenciales del almacenamiento.",
+      "en": "The storage credentials cannot be decrypted."
+    },
+    "STORAGE_OBJECT_MISSING": {
+      "es": "El fichero ya no está en el almacenamiento.",
+      "en": "The file is no longer in storage."
+    },
+    "PRINT_QUEUE_EMPTY": {
+      "es": "La cola de impresión está vacía.",
+      "en": "The print queue is empty."
+    },
+    "PRINT_TEMPLATE_UNKNOWN": {
+      "es": "La plantilla de etiqueta «{template_code}» no existe.",
+      "en": "Label template \"{template_code}\" does not exist."
+    },
+    "PRINT_START_POSITION_INVALID": {
+      "es": "La posición inicial {position} no existe en una hoja de {slots} etiquetas.",
+      "en": "Start position {position} does not exist on a sheet of {slots} labels."
+    },
+    "PRINT_JOB_ALREADY_CLOSED": {
+      "es": "Este trabajo de impresión ya está cerrado.",
+      "en": "This print job is already closed."
+    },
+    "QUOTA_DOCUMENTS_EXCEEDED": {
+      "es": "Has alcanzado el límite de {limit} documentos de tu plan para {period}.",
+      "en": "You have reached your plan limit of {limit} documents for {period}."
+    },
+    "QUOTA_STORAGE_EXCEEDED": {
+      "es": "Has alcanzado el límite de {limit_gb} GB de almacenamiento de tu plan.",
+      "en": "You have reached your plan's {limit_gb} GB storage limit."
+    },
+    "QUOTA_USERS_EXCEEDED": {
+      "es": "Has alcanzado el límite de {limit} usuarios de tu plan.",
+      "en": "You have reached your plan limit of {limit} users."
+    },
+    "QUOTA_SITES_EXCEEDED": {
+      "es": "Has alcanzado el límite de {limit} centros de tu plan.",
+      "en": "You have reached your plan limit of {limit} sites."
+    },
+    "BILLING_DISABLED": {
+      "es": "La facturación no está activada en esta instalación.",
+      "en": "Billing is not enabled on this installation."
+    },
+    "BILLING_PROVIDER_ERROR": {
+      "es": "El proveedor de pagos ha devuelto un error. Inténtalo de nuevo en unos minutos.",
+      "en": "The payment provider returned an error. Try again in a few minutes."
+    },
+    "SUBSCRIPTION_NOT_FOUND": {
+      "es": "Esta empresa no tiene suscripción.",
+      "en": "This company has no subscription."
+    },
+    "PLAN_NOT_FOUND": {
+      "es": "El plan «{plan_code}» no existe.",
+      "en": "Plan \"{plan_code}\" does not exist."
+    },
+    "RETENTION_POLICY_IN_USE": {
+      "es": "No se puede borrar: la política se aplica a {count} documentos.",
+      "en": "Cannot delete: the policy applies to {count} documents."
+    },
+    "RETENTION_BELOW_LEGAL_MINIMUM": {
+      "es": "El plazo mínimo legal de conservación es de {minimum_days} días.",
+      "en": "The legal minimum retention period is {minimum_days} days."
+    },
+    "VERSION_CONFLICT": {
+      "es": "Otra persona ha modificado este registro mientras lo editabas. Recarga y vuelve a intentarlo.",
+      "en": "Someone else changed this record while you were editing. Reload and try again."
+    },
+    "VALIDATION_ERROR": {
+      "es": "Hay campos con errores.",
+      "en": "Some fields contain errors."
+    },
+    "INTERNAL_ERROR": {
+      "es": "Se ha producido un error inesperado. Ya lo estamos mirando.",
+      "en": "An unexpected error occurred. We are looking into it."
+    }
+  }
+}
