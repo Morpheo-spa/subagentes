@@ -62,6 +62,14 @@ class MembershipWrite(Schema):
             raise ValueError(f"unknown permissions: {', '.join(unknown)}")
         return value
 
+    def granted_permissions(self) -> set[str]:
+        """Everything this membership would hand out, role and extras together.
+
+        The router compares it against what the caller holds in the same site:
+        a grant is only legitimate if it is a subset of the granter's own.
+        """
+        return set(ROLE_PERMISSIONS.get(self.role, ())) | set(self.extra_permissions)
+
 
 class MembershipRead(Schema):
     id: uuid.UUID

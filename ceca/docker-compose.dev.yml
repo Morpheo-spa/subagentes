@@ -1,0 +1,97 @@
+# Estampa - DEVELOPMENT overlay. Never deploy with this file.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#   make up
+#
+# It is not called docker-compose.override.yml any more (audit E-15): Compose
+# auto-loads that name, so `docker compose up -d` on a server silently switched
+# the images to the `dev` target, which runs as root with the source bind-
+# mounted, DEBUG=true and the Traefik dashboard open. Requiring an explicit -f
+# means the accidental command now brings up the hardened stack instead.
+#
+# DEBUG=true makes SQLAlchemy echo statements with their bound parameters -
+# password hashes and viewer tokens included (audit E-21) - and re-enables
+# /docs. Settings refuses to start with DEBUG=true and ENVIRONMENT=production,
+# so this overlay cannot be repurposed as a production one.
+#
+# Everything published here is bound to 127.0.0.1: even on a laptop these ports
+# have no business being reachable from the local network.
+
+services:
+  api:
+    build:
+      target: dev
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+    environment:
+      ENVIRONMENT: local
+      DEBUG: "true"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./backend:/app
+      - api_local_storage:/var/lib/estampa/storage
+
+  worker:
+    build:
+      target: dev
+    command: ["dramatiq", "app.tasks", "--processes", "1", "--threads", "2", "--watch", "/app"]
+    environment:
+      ENVIRONMENT: local
+      DEBUG: "true"
+    volumes:
+      - ./backend:/app
+      - api_local_storage:/var/lib/estampa/storage
+
+  frontend:
+    build:
+      target: dev
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+    expose:
+      - "5173"
+    labels:
+      - traefik.http.services.estampa-frontend.loadbalancer.server.port=5173
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+
+  # Direct access to the data stores, for psql / redis-cli / the MinIO console.
+  # The base file keeps all of these on the internal network only.
+  postgres:
+    ports:
+      - "127.0.0.1:5433:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6380:6379"
+
+  minio:
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+
+  traefik:
+    # A different static configuration, not extra flags: when --configFile is
+    # given, Traefik ignores CLI flags and environment variables entirely, so
+    # the old `--api.insecure=true` in the override never did anything. Volumes
+    # merge by mount target, so this replaces the base static config with the
+    # development one and leaves the rest of the mounts alone.
+    volumes:
+      - ./infra/traefik/traefik.dev.yml:/etc/traefik/traefik.yml:ro
+    ports:
+      # 80 and 443 come from the base file; this adds the dashboard, localhost
+      # only, served unauthenticated by traefik.dev.yml.
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  api_local_storage:
+  frontend_node_modules:

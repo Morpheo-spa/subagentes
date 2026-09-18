@@ -90,7 +90,13 @@ class User(Base, TimestampMixin, OptimisticLock):
     """A person. Belongs to one MM and to one or more of its sites."""
 
     __tablename__ = "users"
-    __table_args__ = (Index("ix_users_mm_id_email", "mm_id", "email", unique=True),)
+    #: The email is unique **globally**, not per company: the login has no tenant
+    #: to scope the lookup by, so two companies sharing an address would make the
+    #: lookup ambiguous and break both logins. See docs/SECURITY-AUDIT.md E-08.
+    __table_args__ = (
+        Index("ix_users_mm_id_email", "mm_id", "email", unique=True),
+        Index("ix_users_email", "email", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = uuid_pk()
     mm_id: Mapped[uuid.UUID] = mapped_column(

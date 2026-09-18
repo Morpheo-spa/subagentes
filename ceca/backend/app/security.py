@@ -68,7 +68,11 @@ def create_token(
         "locale": locale,
         "type": token_type,
         "jti": secrets.token_urlsafe(16),
-        "iat": int(now.timestamp()),
+        # Sub-second on purpose. RFC 7519 NumericDate allows a fraction, and the
+        # session epoch in app/cache.py compares against this: with whole seconds,
+        # a token minted just after a role change could not be told apart from one
+        # minted just before it, and the honest refresh would be refused too.
+        "iat": now.timestamp(),
         "exp": int((now + lifetime).timestamp()),
     }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)

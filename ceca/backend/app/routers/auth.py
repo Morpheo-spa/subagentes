@@ -48,7 +48,15 @@ Membership = tuple[UserSite, Site]
 
 
 async def _user_by_email(db: Db, email: str) -> User | None:
-    """One of the few sanctioned unscoped reads: the tenant is not known yet."""
+    """One of the few sanctioned unscoped reads: the tenant is not known yet.
+
+    ``scalar_one_or_none`` is safe here only because ``users.email`` carries a
+    **global** unique index (``ix_users_email``, migration 0004). Were the
+    address unique per company instead, a second company registering the same
+    email would make this query return two rows and turn every login attempt by
+    either owner into a 500, permanently. Creating that duplicate is refused at
+    the API with ``EMAIL_ALREADY_EXISTS`` and at the database by the index.
+    """
     stmt = select(User).where(User.email == email.lower())
     return (await db.execute(stmt)).scalar_one_or_none()
 

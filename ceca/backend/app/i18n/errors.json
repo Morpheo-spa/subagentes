@@ -264,6 +264,22 @@
     "STORAGE_CREDENTIALS_REQUIRED": {
       "es": "Este almacenamiento necesita credenciales explícitas.",
       "en": "This storage backend requires explicit credentials."
+    },
+    "SELF_ROLE_CHANGE_FORBIDDEN": {
+      "es": "No puedes cambiar tu propio rol ni tus propios permisos. Pídeselo a otro administrador.",
+      "en": "You cannot change your own role or permissions. Ask another administrator to do it."
+    },
+    "ROLE_ESCALATION_FORBIDDEN": {
+      "es": "No puedes conceder el rol «{role}»: incluye permisos que tú no tienes.",
+      "en": "You cannot grant the \"{role}\" role: it includes permissions you do not have."
+    },
+    "PERMISSION_ESCALATION_FORBIDDEN": {
+      "es": "No puedes conceder permisos que tú no tienes: {permissions}.",
+      "en": "You cannot grant permissions you do not hold: {permissions}."
+    },
+    "SESSION_STALE": {
+      "es": "Tus permisos han cambiado. Vuelve a cargar la sesión.",
+      "en": "Your permissions have changed. Refresh your session."
     }
   }
 }

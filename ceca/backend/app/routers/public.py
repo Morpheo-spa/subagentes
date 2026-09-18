@@ -18,10 +18,24 @@ from app.schemas.documents import PublicDocumentView
 from app.services import documents as documents_service
 
 #: Sent on every public response, success or file.
+#:
+#: ``nosniff`` and the policy below are emitted by the application on purpose.
+#: Both also exist in the Traefik middleware, and that is not the same thing: a
+#: deployment that puts uvicorn behind something else, or a router added without
+#: the middleware, would silently lose them, and what is being served here is an
+#: attacker-supplied file at ``Content-Disposition: inline`` on the API's own
+#: origin. A polyglot PDF that a sniffing browser decides is HTML would run
+#: there. The policy gives the document nothing: no script, no network, no
+#: framing, only the object it is.
 PUBLIC_HEADERS = {
     "X-Robots-Tag": "noindex, nofollow",
     "Cache-Control": "no-store",
     "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": (
+        "default-src 'none'; object-src 'self'; base-uri 'none'; "
+        "frame-ancestors 'none'; sandbox"
+    ),
 }
 
 TokenPath = Annotated[str, Path(min_length=16, max_length=64)]
@@ -68,9 +82,27 @@ async def view_document(
 
 
 @router.head("/{token}", status_code=200)
-async def head_document(token: TokenPath, db: Db) -> Response:
-    """Lets a scanner check the link without leaving an access-log entry."""
-    await _resolve(db, token)
+async def head_document(
+    token: TokenPath, request: Request, db: Db, ip_hash: ClientIpHash
+) -> Response:
+    """Same answer as GET, and the same row in the access log.
+
+    This used to resolve the token and say nothing, which made it two things at
+    once: a blind spot in the trail a tenant relies on as evidence, and a free
+    oracle for sorting live tokens from revoked ones as fast as you can send
+    requests. Checking whether a delivery note is still valid *is* consulting
+    it, so it is recorded like any other consultation. Telling a HEAD apart from
+    a real scan in the statistics needs a column ``document_accesses`` does not
+    have yet; until it does, an over-counted scan beats an unrecorded one.
+    """
+    resolution = await _resolve(db, token)
+    await documents_service.record_public_access(
+        db,
+        document=resolution.document,
+        share_token=resolution.share_token,
+        ip_hash=ip_hash,
+        user_agent=request.headers.get("User-Agent"),
+    )
     return Response(status_code=200, headers=PUBLIC_HEADERS)
 
 
@@ -94,6 +126,8 @@ async def stream_document(
         media_type="application/pdf",
         headers={
             **PUBLIC_HEADERS,
-            "Content-Disposition": content_disposition("inline", document.original_filename),
+            "Content-Disposition": content_disposition(
+                "inline", documents_service.header_filename(document.original_filename)
+            ),
         },
     )

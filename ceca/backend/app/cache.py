@@ -82,13 +82,13 @@ async def invalidate_user_sessions(user_id: uuid.UUID) -> None:
     or removed, or the password is replaced. The mark only has to outlive the
     longest-lived access token, so it expires with one.
 
-    The epoch is the **next** whole second: ``iat`` has one-second resolution,
-    so a token minted during this very second must not be able to look newer
-    than the change that invalidated it.
+    The mark is a sub-second timestamp, and so is the ``iat`` it is compared
+    against: a token minted a moment *after* the change carries the new claims
+    and must keep working, which is how a live session recovers by refreshing.
     """
     ttl = get_settings().access_token_minutes * 60 + 60
-    epoch = int(datetime.now(UTC).timestamp()) + 1
-    await get_redis().setex(_epoch_key(user_id), ttl, str(epoch))
+    epoch = datetime.now(UTC).timestamp()
+    await get_redis().setex(_epoch_key(user_id), ttl, repr(epoch))
 
 
 async def reject_if_stale(payload: dict[str, Any]) -> None:
@@ -106,5 +106,5 @@ async def reject_if_stale(payload: dict[str, Any]) -> None:
     if raw is None:
         return
     issued_at = payload.get("iat")
-    if issued_at is None or int(issued_at) < int(raw):
+    if issued_at is None or float(issued_at) < float(raw):
         raise DomainError("SESSION_STALE", status_code=401)

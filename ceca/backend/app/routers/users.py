@@ -1,4 +1,18 @@
-"""Users of the company and the sites they may work in."""
+"""Users of the company and the sites they may work in.
+
+Every route here is an authorisation surface: ``users:manage`` is what turns a
+row in ``user_sites`` into permissions, so a careless write is privilege
+escalation. Three rules hold the line, and they are enforced here rather than
+in the schema because two of them need the caller's own memberships:
+
+1. **Nobody edits their own role or permissions.** Not a ``site_admin``, not an
+   ``mm_admin``, not a superuser. Another administrator has to do it.
+2. **``users:manage`` reaches only the sites the caller belongs to**, unless the
+   caller is ``mm_admin`` of the company (see :class:`app.deps.AdminScope`). A
+   site is a tenant, so a site outside that scope answers 404, never 403.
+3. **No grant may exceed the granter.** The permission set a role (plus extras)
+   would hand out must be a subset of what the caller holds in that same site.
+"""
 
 from __future__ import annotations
 
@@ -8,8 +22,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import Select, func, select
 
-from app.deps import Db, TenantContext, require_permission
-from app.errors import ConflictError, NotFoundError
+from app.cache import invalidate_user_sessions
+from app.deps import AdminScope, Db, TenantContext, admin_scope, require_permission
+from app.errors import ConflictError, NotFoundError, PermissionDeniedError
 from app.models.tenancy import PERMISSIONS, ROLE_PERMISSIONS, Site, User, UserSite
 from app.routers import ClientIpHash, Page
 from app.schemas.common import PageResponse
@@ -35,11 +50,44 @@ def _company_users(ctx: TenantContext) -> Select[tuple[User]]:
     return select(User).where(User.mm_id == ctx.mm_id)
 
 
-async def _get_user(db: Db, ctx: TenantContext, user_id: uuid.UUID) -> User:
-    user = (await db.execute(_company_users(ctx).where(User.id == user_id))).scalar_one_or_none()
+def _visible_users(ctx: TenantContext, scope: AdminScope) -> Select[tuple[User]]:
+    """The company's users, narrowed to the ones the caller may see.
+
+    An ``mm_admin`` sees the whole company. Anyone else sees only the people who
+    share one of their own sites: a user of another site is another tenant's
+    user, and must be indistinguishable from one that does not exist.
+    """
+    stmt = _company_users(ctx)
+    if scope.company_wide:
+        return stmt
+    return stmt.where(
+        User.id.in_(select(UserSite.user_id).where(UserSite.site_id.in_(scope.site_ids)))
+    )
+
+
+async def _get_user(db: Db, ctx: TenantContext, scope: AdminScope, user_id: uuid.UUID) -> User:
+    user = (
+        await db.execute(_visible_users(ctx, scope).where(User.id == user_id))
+    ).scalar_one_or_none()
     if user is None:
         raise NotFoundError("USER_NOT_FOUND")
     return user
+
+
+def _assert_may_grant(scope: AdminScope, memberships: list[MembershipWrite]) -> None:
+    """No writing outside the caller's sites, and no granting above themselves."""
+    for wanted in memberships:
+        if not scope.may_administer(wanted.site_id):
+            # The site exists, but not for this caller: 404, as for any other tenant.
+            raise NotFoundError("SITE_NOT_FOUND")
+        held = scope.permissions_in(wanted.site_id)
+        if not set(ROLE_PERMISSIONS.get(wanted.role, ())) <= held:
+            raise PermissionDeniedError("ROLE_ESCALATION_FORBIDDEN", role=wanted.role)
+        beyond = sorted(set(wanted.extra_permissions) - held)
+        if beyond:
+            raise PermissionDeniedError(
+                "PERMISSION_ESCALATION_FORBIDDEN", permissions=", ".join(beyond)
+            )
 
 
 async def _memberships_of(db: Db, user_id: uuid.UUID) -> list[MembershipRead]:
@@ -63,8 +111,26 @@ async def _memberships_of(db: Db, user_id: uuid.UUID) -> list[MembershipRead]:
 
 
 async def _read(db: Db, user: User) -> UserRead:
-    payload = UserRead.model_validate(user)
-    return payload.model_copy(update={"memberships": await _memberships_of(db, user.id)})
+    """Build the payload field by field, never from the ORM object wholesale.
+
+    ``UserRead.model_validate(user)`` reads every field off the instance,
+    ``memberships`` included — and that one is a lazy relationship, so loading
+    it from an async session raises ``MissingGreenlet`` and the route 500s. The
+    memberships come from their own query, which is also the only one that
+    resolves the site names.
+    """
+    return UserRead(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        is_superuser=user.is_superuser,
+        locale=user.locale,
+        default_site_id=user.default_site_id,
+        last_login_at=user.last_login_at,
+        created_at=user.created_at,
+        memberships=await _memberships_of(db, user.id),
+    )
 
 
 async def _assert_sites_belong_to_company(
@@ -82,9 +148,21 @@ async def _assert_sites_belong_to_company(
 
 
 async def _replace_memberships(
-    db: Db, ctx: TenantContext, user: User, memberships: list[MembershipWrite]
-) -> None:
+    db: Db,
+    ctx: TenantContext,
+    scope: AdminScope,
+    user: User,
+    memberships: list[MembershipWrite],
+) -> list[uuid.UUID]:
+    """Apply the wanted memberships and return the user's resulting sites.
+
+    The payload replaces only what the caller may administer. Memberships in
+    sites outside the caller's scope are left exactly as they were: a
+    ``site_admin`` of one delegation must not be able to cut a colleague out of
+    another one by omitting it from the list.
+    """
     await _assert_sites_belong_to_company(db, ctx, memberships)
+    _assert_may_grant(scope, memberships)
     existing = {
         membership.site_id: membership
         for membership in (
@@ -105,14 +183,16 @@ async def _replace_memberships(
             continue
         current.role = wanted.role
         current.extra_permissions = list(wanted.extra_permissions)
-    for removed in existing.values():
-        await db.delete(removed)
+    untouched = [
+        site_id for site_id in existing if not scope.may_administer(site_id)
+    ]
+    for site_id, removed in existing.items():
+        if scope.may_administer(site_id):
+            await db.delete(removed)
+    return [membership.site_id for membership in memberships] + untouched
 
 
-def _resolve_default_site(
-    memberships: list[MembershipWrite], wanted: uuid.UUID | None
-) -> uuid.UUID:
-    sites = [membership.site_id for membership in memberships]
+def _resolve_default_site(sites: list[uuid.UUID], wanted: uuid.UUID | None) -> uuid.UUID:
     if wanted is not None and wanted in sites:
         return wanted
     return sites[0]
@@ -152,7 +232,7 @@ async def list_users(
     search: Annotated[str | None, Query(max_length=255)] = None,
     is_active: bool | None = None,
 ) -> PageResponse[UserRead]:
-    stmt = _company_users(ctx)
+    stmt = _visible_users(ctx, await admin_scope(ctx, db))
     if search:
         pattern = f"%{search}%"
         stmt = stmt.where(User.full_name.ilike(pattern) | User.email.ilike(pattern))
@@ -172,22 +252,29 @@ async def create_user(
     payload: UserCreate, ctx: ManageCtx, db: Db, ip_hash: ClientIpHash
 ) -> UserRead:
     email = payload.email.lower()
-    taken = await db.scalar(_company_users(ctx).where(User.email == email))
+    # Globally unique, not per company: the login has no tenant to scope by, so
+    # a second company taking this address would break the first owner's login.
+    # The unique index is the guarantee; this check is only the polite 409.
+    taken = await db.scalar(select(User.id).where(User.email == email))
     if taken is not None:
         raise ConflictError("EMAIL_ALREADY_EXISTS", email=email)
 
+    scope = await admin_scope(ctx, db)
     await _assert_sites_belong_to_company(db, ctx, payload.memberships)
+    _assert_may_grant(scope, payload.memberships)
     user = User(
         mm_id=ctx.mm_id,
         email=email,
         full_name=payload.full_name,
         hashed_password=hash_password(payload.password),
         locale=payload.locale,
-        default_site_id=_resolve_default_site(payload.memberships, payload.default_site_id),
+        default_site_id=_resolve_default_site(
+            [membership.site_id for membership in payload.memberships], payload.default_site_id
+        ),
     )
     db.add(user)
     await db.flush()
-    await _replace_memberships(db, ctx, user, payload.memberships)
+    await _replace_memberships(db, ctx, scope, user, payload.memberships)
     await db.flush()
     await _audit(db, ctx, user, "user.created", ip_hash)
     return await _read(db, user)
@@ -195,7 +282,7 @@ async def create_user(
 
 @router.get("/{user_id}", response_model=UserRead)
 async def get_user(user_id: uuid.UUID, ctx: ReadCtx, db: Db) -> UserRead:
-    return await _read(db, await _get_user(db, ctx, user_id))
+    return await _read(db, await _get_user(db, ctx, await admin_scope(ctx, db), user_id))
 
 
 @router.patch("/{user_id}", response_model=UserRead)
@@ -206,7 +293,12 @@ async def update_user(
     db: Db,
     ip_hash: ClientIpHash,
 ) -> UserRead:
-    user = await _get_user(db, ctx, user_id)
+    scope = await admin_scope(ctx, db)
+    user = await _get_user(db, ctx, scope, user_id)
+    if payload.memberships is not None and user.id == ctx.user_id:
+        # The whole of E-03 in one line: an admin who can rewrite their own
+        # memberships can promote themselves to mm_admin and switch site.
+        raise PermissionDeniedError("SELF_ROLE_CHANGE_FORBIDDEN")
     if payload.version is not None and payload.version != user.version:
         raise ConflictError("VERSION_CONFLICT")
 
@@ -216,10 +308,20 @@ async def update_user(
     if payload.password:
         user.hashed_password = hash_password(payload.password)
     if payload.memberships is not None:
-        await _replace_memberships(db, ctx, user, payload.memberships)
+        sites = await _replace_memberships(db, ctx, scope, user, payload.memberships)
         user.default_site_id = _resolve_default_site(
-            payload.memberships, payload.default_site_id or user.default_site_id
+            sites, payload.default_site_id or user.default_site_id
         )
     await db.flush()
     await _audit(db, ctx, user, "user.updated", ip_hash)
+    if _touches_session(payload):
+        # What the target's access token asserts is no longer true, and the
+        # token carries it for another 30 minutes unless we say otherwise.
+        await invalidate_user_sessions(user.id)
     return await _read(db, user)
+
+
+def _touches_session(payload: UserUpdate) -> bool:
+    """Did this change make the target's live access token a lie?"""
+    fields = payload.model_dump(exclude_unset=True)
+    return any(field in fields for field in ("is_active", "memberships", "password"))

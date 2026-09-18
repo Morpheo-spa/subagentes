@@ -14,11 +14,16 @@ import base64
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_TRAEFIK_CONFIG = "./infra/traefik/traefik.yml"
 
 REQUIRED_KEYS = (
     "ENVIRONMENT",
     "DEBUG",
     "PUBLIC_BASE_URL",
+    "TRUSTED_PROXY_COUNT",
     "DATABASE_URL",
     "REDIS_URL",
     "JWT_SECRET_KEY",
@@ -27,12 +32,20 @@ REQUIRED_KEYS = (
     "MAX_UPLOAD_MB",
     "BILLING_ENABLED",
     "DEFAULT_RETENTION_DAYS",
+    # Infrastructure credentials: the compose services have no defaults left.
+    "POSTGRES_PASSWORD",
+    "REDIS_PASSWORD",
+    "MINIO_ROOT_USER",
+    "MINIO_ROOT_PASSWORD",
 )
 
 MINIMUM_LENGTHS = {
     "JWT_SECRET_KEY": 32,
     "STORAGE_SECRET_KEY": 32,
     "ACCESS_LOG_IP_SALT": 16,
+    "POSTGRES_PASSWORD": 16,
+    "REDIS_PASSWORD": 16,
+    "MINIO_ROOT_PASSWORD": 16,
 }
 
 SECRET_KEYS = (
@@ -42,6 +55,7 @@ SECRET_KEYS = (
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
     "POSTGRES_PASSWORD",
+    "REDIS_PASSWORD",
     "MINIO_ROOT_PASSWORD",
 )
 
@@ -51,6 +65,10 @@ PLACEHOLDER_PATTERN = re.compile(
 )
 
 WEAK_VALUES = {"estampa", "postgres", "password", "admin", "test", "dev", "secret", "changeme"}
+
+# Shipped-by-default identities. A MinIO instance still answering to any of
+# these is an open object store (audit E-06).
+DEFAULT_IDENTITIES = {"estampa", "minio", "minioadmin", "admin", "root", "access_key"}
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 

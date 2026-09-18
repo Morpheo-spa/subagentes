@@ -1,17 +1,46 @@
+# Estampa - base stack. This file is what production runs, so it is the strict
+# one: nothing is published except 80/443, every service needs its password,
+# and the images are the hardened `runtime` targets.
+#
+# Local development adds the published ports, the hot reload and the Traefik
+# dashboard on top of it:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#   make up            # the same thing
+#
+# docker-compose.dev.yml is NOT named *.override.yml on purpose: Compose would
+# load it by itself and a plain `docker compose up` on a server would quietly
+# deploy the development profile (audit E-15).
+
 name: estampa
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
 
 services:
   traefik:
     image: traefik:3.1
     restart: unless-stopped
+    <<: *hardening
     command:
       - --configFile=/etc/traefik/traefik.yml
     ports:
       - "80:80"
-      - "8080:8080"
+      - "443:443"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     volumes:
-      - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      # The static configuration. Point TRAEFIK_STATIC_CONFIG at your own copy
+      # to deploy without editing a tracked file (docs/RUNBOOK.md section 7).
+      - ${TRAEFIK_STATIC_CONFIG:-./infra/traefik/traefik.yml}:/etc/traefik/traefik.yml:ro
       - ./infra/traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik_acme:/letsencrypt
+      # Read-only mount of the Docker socket: it protects the file, not the API.
+      # Whoever controls Traefik controls the daemon, which is why the dashboard
+      # is off (infra/traefik/traefik.yml) and nothing but 80/443 is published.
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       - api
@@ -20,12 +49,14 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    <<: *hardening
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-estampa}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-estampa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required, see .env.example}
       POSTGRES_DB: ${POSTGRES_DB:-estampa}
-    ports:
-      - "5433:5432"
+    # Not published: the database is reachable only from the compose network.
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -38,13 +69,24 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6380:6379"
+    <<: *hardening
+    # Redis holds the JWT blacklist and the Dramatiq broker. Anyone who reaches
+    # it can revive revoked tokens and enqueue withdraw_document for any tenant,
+    # so it requires a password and is never published (audit E-06).
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD is required, see .env.example}
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD is required, see .env.example}
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -52,13 +94,14 @@ services:
   minio:
     image: minio/minio:latest
     restart: unless-stopped
+    <<: *hardening
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-estampa}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-estampa-dev-secret}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required, see .env.example}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required, see .env.example}
+    expose:
+      - "9000"
+      - "9001"
     volumes:
       - minio_data:/data
     healthcheck:
@@ -72,10 +115,13 @@ services:
       context: ./backend
       target: runtime
     restart: unless-stopped
+    <<: *hardening
+    cap_drop:
+      - ALL
+    # DATABASE_URL and REDIS_URL come from .env and nowhere else, credentials
+    # included: scripts/check_env.py checks them against POSTGRES_PASSWORD and
+    # REDIS_PASSWORD so the two halves cannot drift apart.
     env_file: .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://estampa:estampa@postgres:5432/estampa}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     expose:
       - "8000"
     depends_on:
@@ -88,13 +134,13 @@ services:
       - traefik.http.services.estampa-api.loadbalancer.server.port=8000
       # The management API.
       - traefik.http.routers.estampa-api.rule=PathPrefix(`/api`)
-      - traefik.http.routers.estampa-api.entrypoints=web
+      - traefik.http.routers.estampa-api.entrypoints=web,websecure
       - traefik.http.routers.estampa-api.priority=100
       - traefik.http.routers.estampa-api.service=estampa-api
       - traefik.http.routers.estampa-api.middlewares=security-headers@file,api-ratelimit@file
       # The public QR viewer: same service, stricter headers, never indexed.
       - traefik.http.routers.estampa-viewer.rule=PathPrefix(`/v/`)
-      - traefik.http.routers.estampa-viewer.entrypoints=web
+      - traefik.http.routers.estampa-viewer.entrypoints=web,websecure
       - traefik.http.routers.estampa-viewer.priority=110
       - traefik.http.routers.estampa-viewer.service=estampa-api
       - traefik.http.routers.estampa-viewer.middlewares=security-headers@file,public-viewer@file,viewer-ratelimit@file
@@ -104,10 +150,10 @@ services:
       context: ./backend
       target: runtime
     restart: unless-stopped
+    <<: *hardening
+    cap_drop:
+      - ALL
     env_file: .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://estampa:estampa@postgres:5432/estampa}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     command: ["dramatiq", "app.tasks", "--processes", "2", "--threads", "4"]
     depends_on:
       postgres:
@@ -120,17 +166,18 @@ services:
   frontend:
     build:
       context: ./frontend
-      target: dev
+      target: runtime
     restart: unless-stopped
-    environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+    <<: *hardening
+    # The SPA is served as static files by nginx. VITE_API_BASE_URL is baked in
+    # at build time and defaults to /api/v1, same origin as the API.
     expose:
-      - "5173"
+      - "80"
     labels:
       - traefik.enable=true
-      - traefik.http.services.estampa-frontend.loadbalancer.server.port=5173
+      - traefik.http.services.estampa-frontend.loadbalancer.server.port=80
       - traefik.http.routers.estampa-frontend.rule=PathPrefix(`/`)
-      - traefik.http.routers.estampa-frontend.entrypoints=web
+      - traefik.http.routers.estampa-frontend.entrypoints=web,websecure
       - traefik.http.routers.estampa-frontend.priority=1
       - traefik.http.routers.estampa-frontend.service=estampa-frontend
       - traefik.http.routers.estampa-frontend.middlewares=security-headers@file
@@ -139,3 +186,4 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  traefik_acme:

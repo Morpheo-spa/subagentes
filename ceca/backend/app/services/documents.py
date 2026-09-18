@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
@@ -45,6 +46,25 @@ PDF_CONTENT_TYPE = "application/pdf"
 MISSING_FIELD_CODE = "DECA_FIELD_REQUIRED"
 READ_CHUNK = 1024 * 1024
 ACCESS_HISTORY_LIMIT = 200
+
+#: Hard ceiling on one CSV export. The rest of the API is capped at
+#: ``MAX_PAGE_SIZE``; this was the one door through which a client could ask for
+#: the whole archive, holding a cursor and a connection from the pool open for
+#: as long as it took. Beyond this the caller is told, in the response headers,
+#: exactly how much it did not get, and narrows the date filters to walk the
+#: rest. Anything larger belongs in a background job, not in a request.
+EXPORT_ROW_LIMIT = 10_000
+
+#: Characters of DECA data we are willing to turn into a PDF. Checked before
+#: reportlab is handed anything, because the point of the check is to not pay
+#: the cost, and again inside the renderer as a page budget.
+MAX_RENDER_CHARS = 60_000
+
+#: Anything in here inside a filename ends up raw in a ``Content-Disposition``
+#: value. Replaced rather than rejected: documents created before this check
+#: existed have to stay downloadable, which is the whole point.
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+FALLBACK_FILENAME = "documento.pdf"
 
 CSV_COLUMNS = (
     "id",
@@ -186,12 +206,21 @@ async def ingest_upload(
     await quota.check_can_upload(db, ctx, byte_size=len(payload), count=1)
 
     backend = await default_backend(db, ctx)
-    text_layer = pdf.has_text_layer(payload)
+    facts = await pdf.inspect_offloaded(payload, filename=filename)
+    text_layer = facts.has_text_layer
     if not text_layer:
         warnings.append(IngestWarning("DOCUMENT_IS_A_SCAN", {"filename": filename}))
+    if facts.metadata_fields:
+        warnings.append(
+            IngestWarning(
+                "DOCUMENT_METADATA_VISIBLE",
+                {"filename": filename, "fields": ", ".join(facts.metadata_fields)},
+            )
+        )
 
     validator = await DecaValidator.load(db)
     metadata = dict(deca or {})
+    _reject_unknown_codes(validator, metadata)
     complete = bool(metadata) and validator.is_complete(metadata)
 
     uploaded_at = datetime.now(UTC)
@@ -208,7 +237,7 @@ async def ingest_upload(
         storage_key="",
         byte_size=len(payload),
         sha256=digest,
-        page_count=pdf.page_count(payload),
+        page_count=facts.page_count,
         status=DocumentStatus.PROCESSING,
         deca=metadata,
         deca_status=_deca_status(text_layer, complete),
@@ -353,6 +382,7 @@ async def update_deca(
         raise ConflictError("VERSION_CONFLICT")
 
     validator = await DecaValidator.load(db)
+    _reject_unknown_codes(validator, deca)
     merged = {**(document.deca or {}), **deca}
     errors = validator.validate(merged)
     _reject_invalid_values(errors)
@@ -441,17 +471,41 @@ async def open_stream(db: AsyncSession, document: Document) -> AsyncIterator[byt
     return build_adapter(backend).get_stream(document.storage_key)
 
 
-async def export_csv(db: AsyncSession, ctx: TenantContext, *, filters: Any) -> AsyncIterator[str]:
-    """Stream the archive as CSV rows, header first. One row per document."""
+async def count_documents(db: AsyncSession, ctx: TenantContext, *, filters: Any) -> int:
+    """How many rows the filters match, before anything is streamed."""
+    total = await db.scalar(
+        scoped(select(func.count(Document.id)), ctx, Document).where(*_filter_conditions(filters))
+    )
+    return int(total or 0)
+
+
+async def export_csv(
+    db: AsyncSession, ctx: TenantContext, *, filters: Any, limit: int = EXPORT_ROW_LIMIT
+) -> AsyncIterator[str]:
+    """Stream the archive as CSV rows, header first, never more than ``limit``.
+
+    The cap is not silent. The router has already counted the matches and says
+    so in the response headers, and a truncated file ends in a marker row, so a
+    human who opens it in a spreadsheet sees the same thing a program does.
+    """
     validator = await DecaValidator.load(db)
     codes = [spec.code for spec in validator.specs]
     yield _csv_line([*CSV_COLUMNS, *codes])
 
     conditions = _filter_conditions(filters)
-    stmt = scoped_select(Document, ctx).where(*conditions).order_by(Document.created_at.desc())
+    stmt = (
+        scoped_select(Document, ctx)
+        .where(*conditions)
+        .order_by(Document.created_at.desc())
+        .limit(limit)
+    )
     result = await db.stream(stmt)
+    emitted = 0
     async for document in result.scalars():
+        emitted += 1
         yield _csv_line(_csv_row(document, codes))
+    if emitted >= limit:
+        yield _csv_line([f"# EXPORT_TRUNCATED max_rows={limit}"])
 
 
 async def history(db: AsyncSession, ctx: TenantContext, document_id: UUID) -> DocumentHistory:
@@ -592,7 +646,9 @@ async def stamp_qr(db: AsyncSession, ctx: TenantContext, document_id: UUID) -> b
 
     adapter = build_adapter(backend)
     original = b"".join([chunk async for chunk in adapter.get_stream(document.storage_key)])
-    stamped = pdf.embed_qr(original, public_url(share.token))
+    stamped = await pdf.embed_qr_offloaded(
+        original, public_url(share.token), filename=document.original_filename
+    )
 
     await adapter.put(document.storage_key, stamped, PDF_CONTENT_TYPE)
     document.byte_size = len(stamped)
@@ -618,20 +674,25 @@ async def _generate(
     change_reason: str | None = None,
 ) -> Document:
     validator = await DecaValidator.load(db)
+    _reject_unknown_codes(validator, deca)
     errors = validator.validate(deca)
     _reject_invalid_values(errors)
 
+    superseded = _changed_values(previous.deca, deca) if previous else None
+    _reject_expensive_render(deca, superseded)
+
     document_id = uuid4()
     token = new_share_token()
-    rendered = pdf.render_deca_pdf(
+    result = await pdf.render_deca_pdf_offloaded(
         deca,
         qr_url=public_url(token),
         document_id=document_id,
         site_name=site_name or await _site_name(db, ctx),
-        superseded=_changed_values(previous.deca, deca) if previous else None,
+        superseded=superseded,
         change_reason=change_reason,
         language=ctx.locale,
     )
+    rendered = result.data
     await quota.check_can_upload(db, ctx, byte_size=len(rendered), count=1)
     _reject_oversized(f"{document_id}.pdf", rendered)
 
@@ -651,7 +712,7 @@ async def _generate(
         storage_key=storage_key_for(ctx, document_id),
         byte_size=len(rendered),
         sha256=hashlib.sha256(rendered).hexdigest(),
-        page_count=pdf.page_count(rendered),
+        page_count=result.page_count,
         status=DocumentStatus.PROCESSING,
         deca=deca,
         deca_status=DecaStatus.COMPLETE if complete else DecaStatus.INCOMPLETE,
@@ -918,6 +979,60 @@ def _changed_values(previous: dict[str, Any] | None, current: dict[str, Any]) ->
 def _actor(ctx: TenantContext) -> UUID | None:
     """A background job has no user behind it."""
     return None if ctx.user_id == audit.SYSTEM_ACTOR_ID else ctx.user_id
+
+
+def header_filename(name: str | None) -> str:
+    """A filename fit for a ``Content-Disposition`` value.
+
+    ``filename.encode("ascii", "replace")`` leaves ``\r`` and ``\n`` alone -
+    they are perfectly good ASCII - so a delivery note created with a newline in
+    its name used to land in the archive and then fail with a 500 on every
+    single download, for its owner and for the inspector scanning its QR. The
+    schema now refuses such a name on the way in; this is what makes the ones
+    already archived openable again. Accents are untouched: they survive in the
+    RFC 5987 ``filename*`` form.
+    """
+    cleaned = _CONTROL_CHARS.sub("_", (name or "").strip())
+    return cleaned[:255] or FALLBACK_FILENAME
+
+
+def _reject_unknown_codes(validator: DecaValidator, values: dict[str, Any]) -> None:
+    """A code the catalogue does not define is refused, not quietly rendered.
+
+    ``DecaValidator.validate`` walks the catalogue, so anything outside it used
+    to pass validation untouched and still get drawn on the PDF - which is how a
+    bounded set of legal fields turned into an unbounded amount of work.
+    """
+    known = {spec.code for spec in validator.specs}
+    unknown = sorted(code for code in values if code not in known)
+    if not unknown:
+        return
+    raise DomainError(
+        "DECA_FIELD_UNKNOWN",
+        status_code=422,
+        count=len(unknown),
+        fields=", ".join(unknown),
+    )
+
+
+def _reject_expensive_render(deca: dict[str, Any], superseded: dict[str, Any] | None) -> None:
+    """Price the render before paying for it, not after.
+
+    The size check used to run on the finished PDF, which is the one moment when
+    refusing it saves nothing at all.
+    """
+    chars = _render_chars(deca) + _render_chars(superseded or {})
+    if chars > MAX_RENDER_CHARS:
+        raise DomainError(
+            "DECA_TOO_LARGE_TO_RENDER",
+            status_code=422,
+            chars=chars,
+            max_chars=MAX_RENDER_CHARS,
+        )
+
+
+def _render_chars(values: dict[str, Any]) -> int:
+    return sum(len(str(code)) + len(str(value)) for code, value in values.items())
 
 
 def _reject_non_pdf(filename: str, data: bytes) -> None:
