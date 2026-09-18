@@ -158,7 +158,7 @@ async def test_a_harmless_edit_does_not_invalidate_the_session(
 
 
 async def test_the_check_fails_closed_when_redis_is_unreachable(
-    client: Any, session_pair: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    client: Any, app: Any, db: Any, session_pair: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Like the blacklist: no answer from Redis means no access, never free access."""
     import app.cache as cache
@@ -175,7 +175,14 @@ async def test_the_check_fails_closed_when_redis_is_unreachable(
 
     monkeypatch.setattr(cache, "_client", DeadRedis(), raising=False)
 
-    response = await client.get(PROBE, headers=_auth(token))
+    # A client that lets the app's own 500 handler answer, the way uvicorn does,
+    # instead of re-raising the exception into the test.
+    import httpx
+
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as unlucky:
+        response = await unlucky.get(PROBE, headers=_auth(token))
+
     assert response.status_code != 200, "an unanswerable revocation check must deny"
     assert response.status_code == 500
     assert response.json()["detail"]["code"] == "INTERNAL_ERROR"

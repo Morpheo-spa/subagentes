@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn, field_validator
+from pydantic import Field, PostgresDsn, RedisDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     app_name: str = "Estampa"
     public_base_url: str = "http://localhost"
     api_prefix: str = "/api/v1"
+
+    # --- Proxy --------------------------------------------------------------
+    # How many reverse proxies sit in front of the API. X-Forwarded-For is read
+    # from the right with this many hops, so the part a client can write cannot
+    # reach the access log. 1 = Traefik only, and it must stay equal to
+    # ipStrategy.depth in infra/traefik/dynamic/middlewares.yml (audit E-10).
+    trusted_proxy_count: int = Field(default=1, ge=0)
 
     # --- Persistence --------------------------------------------------------
     database_url: PostgresDsn
@@ -65,6 +72,23 @@ class Settings(BaseSettings):
     # and the UI warns when a site is left sitting on the bare minimum.
     default_retention_days: int = 365
     retention_sweep_hour_utc: int = 2
+
+    @model_validator(mode="after")
+    def _forbid_debug_in_production(self) -> Settings:
+        """Debug logging in production leaks credentials, so it is not a choice.
+
+        DEBUG turns on SQLAlchemy ``echo``, which writes every statement with its
+        bound parameters - password hashes on login, viewer tokens on every scan
+        of a QR - and re-enables /docs. The deployment must fail here rather than
+        run and log them (audit E-15, E-21).
+        """
+        if self.debug and self.environment == "production":
+            raise ValueError(
+                "DEBUG=true is refused with ENVIRONMENT=production: SQLAlchemy would "
+                "log every statement with its bound parameters (password hashes, "
+                "share tokens) and /docs would be served. Set DEBUG=false."
+            )
+        return self
 
     @field_validator("public_base_url")
     @classmethod

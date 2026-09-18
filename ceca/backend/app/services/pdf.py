@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 from uuid import UUID
 
 from pypdf import PdfReader, PdfWriter
@@ -66,8 +66,6 @@ PRODUCER = "Estampa"
 #: Metadata keys worth telling the tenant about before their file goes public.
 METADATA_KEYS = ("/Author", "/Creator", "/Producer", "/Subject", "/Keywords", "/Title")
 
-T = TypeVar("T")
-
 
 @dataclass(frozen=True, slots=True)
 class PdfFacts:
@@ -95,6 +93,7 @@ class RenderedPdf:
 
     data: bytes
     page_count: int
+
 
 _FIELDS_PATH = Path(__file__).resolve().parent.parent / "i18n" / "deca_fields.json"
 
@@ -254,7 +253,7 @@ def _probe_text(reader: PdfReader, pages: int, deadline: float, filename: str) -
     return False
 
 
-def _metadata_fields(reader: PdfReader) -> tuple[str, ...] :
+def _metadata_fields(reader: PdfReader) -> tuple[str, ...]:
     """Which identifying metadata an uploaded file carries into the open.
 
     We do not strip it - an uploaded DeCA is the tenant's own evidence and we
@@ -272,11 +271,11 @@ def _metadata_fields(reader: PdfReader) -> tuple[str, ...] :
         if "/Metadata" in reader.root_object:
             present.append("XMP")
     except Exception:
-        pass
+        return tuple(present)
     return tuple(present)
 
 
-async def _offloaded(work: Callable[[], T], *, filename: str) -> T:
+async def _offloaded[ResultT](work: Callable[[], ResultT], *, filename: str) -> ResultT:
     """Run PDF work off the loop, and stop waiting for it if it misbehaves.
 
     The thread cannot be killed - Python has no such button - so the timeout
@@ -591,9 +590,7 @@ def _page_break(pdf: pdfcanvas.Canvas, cursor: float, language: str) -> float:
     if cursor > MARGIN + 24 * mm:
         return cursor
     if pdf.getPageNumber() >= MAX_RENDER_PAGES:
-        raise DomainError(
-            "DECA_RENDER_PAGE_LIMIT", status_code=422, max_pages=MAX_RENDER_PAGES
-        )
+        raise DomainError("DECA_RENDER_PAGE_LIMIT", status_code=422, max_pages=MAX_RENDER_PAGES)
     _draw_footer(pdf, language)
     pdf.showPage()
     return PAGE_HEIGHT - MARGIN

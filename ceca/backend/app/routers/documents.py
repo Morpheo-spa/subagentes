@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import date
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
+from starlette.datastructures import FormData, UploadFile
+from starlette.formparsers import MultiPartException, MultiPartParser
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.deps import Db, Language, TenantContext, require_permission
 from app.errors import DomainError, localised_message
 from app.models.documents import (
@@ -24,6 +28,7 @@ from app.routers import ClientIpHash, Page, content_disposition
 from app.schemas.common import Acknowledgement, ErrorDetail, PageResponse
 from app.schemas.documents import (
     DecaPatchRequest,
+    DecaSidecar,
     DocumentFilters,
     DocumentGenerateRequest,
     DocumentHistoryResponse,
@@ -47,6 +52,42 @@ UpdateCtx = Annotated[TenantContext, Depends(require_permission("documents:updat
 WithdrawCtx = Annotated[TenantContext, Depends(require_permission("documents:withdraw"))]
 ExportCtx = Annotated[TenantContext, Depends(require_permission("documents:export"))]
 RevokeCtx = Annotated[TenantContext, Depends(require_permission("share:revoke"))]
+
+#: Non-file parts of an upload: the DECA sidecar and the retention policy.
+MAX_FORM_FIELDS = 8
+#: Bytes a non-file part may occupy. Enforced by the parser as it reads.
+MAX_TEXT_PART_BYTES = 64 * 1024
+#: Slack over the legitimate maximum, for boundaries and part headers.
+UPLOAD_BODY_MARGIN_BYTES = 1024 * 1024
+
+#: The multipart body is read by hand, so the request shape has to be described
+#: by hand too. Declaring ``files: list[UploadFile]`` would have FastAPI parse
+#: and spool the whole body before the first line of this module runs, which is
+#: precisely the window a 50 GB POST used to fill the container disk through.
+UPLOAD_REQUEST_BODY = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "multipart/form-data": {
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "files": {
+                            "type": "array",
+                            "items": {"type": "string", "format": "binary"},
+                        },
+                        "deca": {
+                            "type": "string",
+                            "description": "JSON object of DECA codes shared by the batch.",
+                        },
+                        "retention_policy_id": {"type": "string", "format": "uuid"},
+                    },
+                    "required": ["files"],
+                }
+            }
+        },
+    }
+}
 
 
 def _filters(
@@ -77,7 +118,12 @@ Filters = Annotated[DocumentFilters, Depends(_filters)]
 
 
 def _parse_deca(raw: str | None) -> dict[str, Any]:
-    """The multipart sidecar carrying metadata common to the whole batch."""
+    """The multipart sidecar carrying metadata common to the whole batch.
+
+    It is JSON inside a form field, so it reaches us having skipped every bound
+    the JSON endpoints get from their schema. It is put back through the same
+    one here.
+    """
     if not raw:
         return {}
     try:
@@ -86,7 +132,87 @@ def _parse_deca(raw: str | None) -> dict[str, Any]:
         raise DomainError("VALIDATION_ERROR", status_code=422) from exc
     if not isinstance(parsed, dict):
         raise DomainError("VALIDATION_ERROR", status_code=422)
-    return parsed
+    try:
+        sidecar = DecaSidecar(deca=parsed)
+    except ValidationError as exc:
+        raise DomainError("VALIDATION_ERROR", status_code=422) from exc
+    return dict(sidecar.deca)
+
+
+def _max_upload_body_bytes(settings: Settings) -> int:
+    """The largest body this endpoint could legitimately need."""
+    megabytes = settings.max_files_per_upload * settings.max_upload_mb
+    return megabytes * 1024 * 1024 + UPLOAD_BODY_MARGIN_BYTES
+
+
+def _body_too_large(size: int, maximum: int) -> DomainError:
+    return DomainError(
+        "UPLOAD_BODY_TOO_LARGE",
+        status_code=413,
+        size_mb=round(size / (1024 * 1024), 2),
+        max_mb=round(maximum / (1024 * 1024)),
+    )
+
+
+async def _capped_stream(request: Request, maximum: int) -> AsyncGenerator[bytes, None]:
+    """Feed the parser, and cut the request off the moment it overruns.
+
+    ``Content-Length`` is checked first because it is free, but it is a claim,
+    not a fact - a chunked body has none, and a lying one is trivial - so the
+    real limit is this counter, applied to bytes as they arrive.
+    """
+    received = 0
+    async for chunk in request.stream():
+        received += len(chunk)
+        if received > maximum:
+            raise _body_too_large(received, maximum)
+        yield chunk
+
+
+async def _parse_upload(request: Request, settings: Settings) -> FormData:
+    """Parse the multipart body under limits that apply while it is read."""
+    if "multipart/form-data" not in request.headers.get("Content-Type", ""):
+        raise DomainError("UPLOAD_NOT_MULTIPART", status_code=415)
+
+    maximum = _max_upload_body_bytes(settings)
+    declared = request.headers.get("Content-Length")
+    if declared and declared.isdigit() and int(declared) > maximum:
+        raise _body_too_large(int(declared), maximum)
+
+    parser = MultiPartParser(
+        request.headers,
+        _capped_stream(request, maximum),
+        max_files=settings.max_files_per_upload,
+        max_fields=MAX_FORM_FIELDS,
+        max_part_size=MAX_TEXT_PART_BYTES,
+    )
+    try:
+        return await parser.parse()
+    except MultiPartException as exc:
+        if "Too many files" in str(exc):
+            # The parser stops counting at the limit, so this is a floor.
+            raise DomainError(
+                "TOO_MANY_FILES",
+                status_code=413,
+                count=settings.max_files_per_upload + 1,
+                max_files=settings.max_files_per_upload,
+            ) from exc
+        raise DomainError("UPLOAD_MALFORMED", status_code=400) from exc
+
+
+def _form_text(form: FormData, name: str) -> str | None:
+    value = form.get(name)
+    return value if isinstance(value, str) and value else None
+
+
+def _form_uuid(form: FormData, name: str) -> uuid.UUID | None:
+    raw = _form_text(form, name)
+    if raw is None:
+        return None
+    try:
+        return uuid.UUID(raw)
+    except ValueError as exc:
+        raise DomainError("VALIDATION_ERROR", status_code=422) from exc
 
 
 async def _public_url(db: Db, document: Document) -> tuple[str | None, str | None]:
@@ -125,55 +251,65 @@ async def list_documents(
     return PageResponse.of([DocumentSummary.model_validate(row) for row in rows], total, page)
 
 
-@router.post("/", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=UploadResponse,
+    status_code=status.HTTP_201_CREATED,
+    openapi_extra=UPLOAD_REQUEST_BODY,
+)
 async def upload_documents(
+    request: Request,
     ctx: CreateCtx,
     db: Db,
     language: Language,
     ip_hash: ClientIpHash,
-    files: Annotated[list[UploadFile], File()],
-    deca: Annotated[str | None, Form()] = None,
-    retention_policy_id: Annotated[uuid.UUID | None, Form()] = None,
 ) -> UploadResponse:
-    """Multi-file upload. One bad file is one bad row, not a failed batch."""
-    settings = get_settings()
-    if len(files) > settings.max_files_per_upload:
-        raise DomainError(
-            "TOO_MANY_FILES",
-            count=len(files),
-            max_files=settings.max_files_per_upload,
-        )
-    await quota_service.check_can_upload(db, ctx, count=len(files))
+    """Multi-file upload. One bad file is one bad row, not a failed batch.
 
-    metadata = _parse_deca(deca)
-    items: list[UploadItemResult] = []
-    for upload in files:
-        filename = upload.filename or "sin-nombre.pdf"
-        try:
-            outcome = await documents_service.ingest_upload(
-                db,
-                ctx,
-                upload=upload,
-                filename=filename,
-                deca=metadata,
-                retention_policy_id=retention_policy_id,
-                actor_user_id=ctx.user_id,
-                ip_hash=ip_hash,
+    The body is parsed here rather than declared as parameters so that the size
+    and file-count limits apply *while* it is being received. Declared, FastAPI
+    would have spooled every part to disk before this function existed.
+    """
+    settings = get_settings()
+    form = await _parse_upload(request, settings)
+    try:
+        files = [value for value in form.getlist("files") if isinstance(value, UploadFile)]
+        if not files:
+            raise DomainError("VALIDATION_ERROR", status_code=422)
+        metadata = _parse_deca(_form_text(form, "deca"))
+        retention_policy_id = _form_uuid(form, "retention_policy_id")
+        await quota_service.check_can_upload(db, ctx, count=len(files))
+
+        items: list[UploadItemResult] = []
+        for upload in files:
+            filename = upload.filename or "sin-nombre.pdf"
+            try:
+                outcome = await documents_service.ingest_upload(
+                    db,
+                    ctx,
+                    upload=upload,
+                    filename=filename,
+                    deca=metadata,
+                    retention_policy_id=retention_policy_id,
+                    actor_user_id=ctx.user_id,
+                    ip_hash=ip_hash,
+                )
+            except DomainError as exc:
+                items.append(_failure(filename, exc, language))
+                continue
+            items.append(
+                UploadItemResult(
+                    filename=filename,
+                    accepted=True,
+                    document=DocumentSummary.model_validate(outcome.document),
+                    warnings=[
+                        UploadWarning(code=warning.code, params=warning.params)
+                        for warning in outcome.warnings
+                    ],
+                )
             )
-        except DomainError as exc:
-            items.append(_failure(filename, exc, language))
-            continue
-        items.append(
-            UploadItemResult(
-                filename=filename,
-                accepted=True,
-                document=DocumentSummary.model_validate(outcome.document),
-                warnings=[
-                    UploadWarning(code=warning.code, params=warning.params)
-                    for warning in outcome.warnings
-                ],
-            )
-        )
+    finally:
+        await form.close()
 
     accepted = sum(1 for item in items if item.accepted)
     return UploadResponse(items=items, accepted=accepted, rejected=len(items) - accepted)
@@ -202,13 +338,27 @@ async def generate_document(
 
 @router.get("/export.csv")
 async def export_documents(ctx: ExportCtx, db: Db, filters: Filters) -> StreamingResponse:
-    rows = documents_service.export_csv(db, ctx, filters=filters)
+    """The archive as CSV, capped, with the cap stated in the response.
+
+    Every other collection endpoint is bounded by ``MAX_PAGE_SIZE``; this one
+    used to stream the whole archive, holding a cursor and one of twenty pooled
+    connections for as long as that took. It is now bounded too, and the caller
+    is told the total it matched so it can narrow ``created_from`` /
+    ``created_to`` and walk the rest in slices.
+    """
+    limit = documents_service.EXPORT_ROW_LIMIT
+    total = await documents_service.count_documents(db, ctx, filters=filters)
+    rows = documents_service.export_csv(db, ctx, filters=filters, limit=limit)
     return StreamingResponse(
         rows,
         media_type="text/csv; charset=utf-8",
         headers={
             "Content-Disposition": content_disposition("attachment", "albaranes.csv"),
             "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "X-Export-Total": str(total),
+            "X-Export-Row-Limit": str(limit),
+            "X-Export-Truncated": "true" if total > limit else "false",
         },
     )
 
@@ -329,8 +479,11 @@ async def download_document(document_id: uuid.UUID, ctx: ReadCtx, db: Db) -> Str
         stream,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": content_disposition("inline", document.original_filename),
+            "Content-Disposition": content_disposition(
+                "inline", documents_service.header_filename(document.original_filename)
+            ),
             "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
         },
     )
 

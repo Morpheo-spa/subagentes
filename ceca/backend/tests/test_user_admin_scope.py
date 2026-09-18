@@ -277,3 +277,22 @@ async def test_an_mm_admin_still_administers_every_site_of_the_company(
     )
     assert response.status_code == 200, response.text
     assert await _role_in(db, target.id, site_b.id) == "site_admin"
+
+
+async def test_a_default_site_the_user_does_not_belong_to_is_refused(
+    client: Any, db: Any, company: dict[str, Any]
+) -> None:
+    """The one site id that legitimately travels in this body is still a target."""
+    admin, target, site_b = company["admin_a"], company["operator_a"], company["site_b"]
+    token = await _token(client, admin.email)
+
+    response = await client.patch(
+        f"/api/v1/users/{target.id}",
+        headers=_auth(token),
+        json={"default_site_id": str(site_b.id)},
+    )
+
+    assert response.status_code == 404, response.text
+    assert response.json()["detail"]["code"] == "SITE_NOT_FOUND"
+    await db.refresh(target)
+    assert target.default_site_id == company["site_a"].id

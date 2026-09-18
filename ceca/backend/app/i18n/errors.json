@@ -280,6 +280,46 @@
     "SESSION_STALE": {
       "es": "Tus permisos han cambiado. Vuelve a cargar la sesión.",
       "en": "Your permissions have changed. Refresh your session."
+    },
+    "DECA_FIELD_UNKNOWN": {
+      "es": "{count} campo(s) no pertenecen al catálogo DeCA y no se pueden guardar: {fields}.",
+      "en": "{count} field(s) are not part of the DeCA catalogue and cannot be stored: {fields}."
+    },
+    "DECA_TOO_LARGE_TO_RENDER": {
+      "es": "Los datos del albarán ocupan {chars} caracteres y el máximo para generar el PDF es {max_chars}.",
+      "en": "The delivery note data is {chars} characters long; the limit for generating the PDF is {max_chars}."
+    },
+    "DECA_RENDER_PAGE_LIMIT": {
+      "es": "El PDF generado superaría el máximo de {max_pages} páginas.",
+      "en": "The generated PDF would exceed the maximum of {max_pages} pages."
+    },
+    "PDF_TOO_MANY_PAGES": {
+      "es": "El PDF «{filename}» declara {pages} páginas y el máximo admitido es {max_pages}.",
+      "en": "The PDF '{filename}' declares {pages} pages; the maximum accepted is {max_pages}."
+    },
+    "PDF_TOO_COMPLEX": {
+      "es": "El PDF «{filename}» contiene {objects} objetos y el máximo admitido es {max_objects}.",
+      "en": "The PDF '{filename}' contains {objects} objects; the maximum accepted is {max_objects}."
+    },
+    "PDF_ANALYSIS_TIMEOUT": {
+      "es": "El análisis del PDF «{filename}» ha superado los {seconds} segundos y se ha cancelado.",
+      "en": "Analysing the PDF '{filename}' took longer than {seconds} seconds and was cancelled."
+    },
+    "DOCUMENT_METADATA_VISIBLE": {
+      "es": "El fichero «{filename}» lleva metadatos ({fields}) que verá cualquiera que escanee el QR. No los modificamos: el fichero es el original del cliente.",
+      "en": "The file '{filename}' carries metadata ({fields}) visible to anyone who scans the QR. We do not modify it: the file is the client's original."
+    },
+    "UPLOAD_BODY_TOO_LARGE": {
+      "es": "El envío ocupa {size_mb} MB y el máximo por petición es {max_mb} MB.",
+      "en": "The request body is {size_mb} MB; the maximum per request is {max_mb} MB."
+    },
+    "UPLOAD_NOT_MULTIPART": {
+      "es": "La subida de ficheros debe enviarse como multipart/form-data.",
+      "en": "File uploads must be sent as multipart/form-data."
+    },
+    "UPLOAD_MALFORMED": {
+      "es": "El envío de ficheros está mal formado y no se ha podido leer.",
+      "en": "The file upload is malformed and could not be read."
     }
   }
 }

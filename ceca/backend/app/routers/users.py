@@ -192,6 +192,22 @@ async def _replace_memberships(
     return [membership.site_id for membership in memberships] + untouched
 
 
+async def _assert_default_site_is_a_membership(
+    db: Db, user: User, site_id: uuid.UUID
+) -> None:
+    """``default_site_id`` is a target that arrives in the body, so it is checked.
+
+    It grants nothing by itself — the login only ever picks a site the user is a
+    member of — but an unverified site id from a body has no business being
+    written to a row, and a site the user does not belong to is not theirs.
+    """
+    found = await db.scalar(
+        select(UserSite.id).where(UserSite.user_id == user.id, UserSite.site_id == site_id)
+    )
+    if found is None:
+        raise NotFoundError("SITE_NOT_FOUND")
+
+
 def _resolve_default_site(sites: list[uuid.UUID], wanted: uuid.UUID | None) -> uuid.UUID:
     if wanted is not None and wanted in sites:
         return wanted
@@ -302,6 +318,9 @@ async def update_user(
     if payload.version is not None and payload.version != user.version:
         raise ConflictError("VERSION_CONFLICT")
 
+    if payload.memberships is None and payload.default_site_id is not None:
+        await _assert_default_site_is_a_membership(db, user, payload.default_site_id)
+
     changes = payload.model_dump(exclude_unset=True, exclude={"version", "password", "memberships"})
     for field, value in changes.items():
         setattr(user, field, value)
@@ -321,7 +340,9 @@ async def update_user(
     return await _read(db, user)
 
 
+#: Fields whose change makes the target's live access token a lie.
+SESSION_BEARING_FIELDS = frozenset({"is_active", "memberships", "password"})
+
+
 def _touches_session(payload: UserUpdate) -> bool:
-    """Did this change make the target's live access token a lie?"""
-    fields = payload.model_dump(exclude_unset=True)
-    return any(field in fields for field in ("is_active", "memberships", "password"))
+    return bool(payload.model_fields_set & SESSION_BEARING_FIELDS)

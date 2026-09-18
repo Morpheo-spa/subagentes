@@ -35,7 +35,7 @@ transporte interior, y los ficheros se conservan **un año como mínimo**.
 ```bash
 cp .env.example .env     # 1. plantilla de entorno
 make secrets             # 2. genera JWT_SECRET_KEY, STORAGE_SECRET_KEY (Fernet) y el salt
-docker compose up --build -d   # 3. traefik, postgres, redis, minio, api, worker, frontend
+make up                        # 3. traefik, postgres, redis, minio, api, worker, frontend
 make migrate             # 4. alembic upgrade head (crea el esquema y siembra planes y campos DECA)
 make seed                # 5. tenant de demostración con usuarios, documentos y política
 ```

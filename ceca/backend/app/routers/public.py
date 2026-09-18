@@ -33,8 +33,7 @@ PUBLIC_HEADERS = {
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy": (
-        "default-src 'none'; object-src 'self'; base-uri 'none'; "
-        "frame-ancestors 'none'; sandbox"
+        "default-src 'none'; object-src 'self'; base-uri 'none'; frame-ancestors 'none'; sandbox"
     ),
 }
 

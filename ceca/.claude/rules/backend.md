@@ -34,6 +34,52 @@ el visor público, y los catálogos globales (`plans`, `deca_field_definitions`)
 Formato `<recurso>:<accion>`. Catálogo en `app/models/tenancy.py::PERMISSIONS`.
 `is_superuser` salta la comprobación pero **no** el filtro de tenant.
 
+## Ámbito de administración (`users:manage`)
+
+Tener `users:manage` **no** es poder administrar a toda la empresa. El alcance real lo
+resuelve `AdminScope` (`app/deps.py`), construido con las membresías vivas del actor —nunca
+con los claims del JWT, que pueden ir por detrás de la realidad:
+
+| Actor | Sites que administra | Permisos que puede conceder |
+|-------|----------------------|------------------------------|
+| `mm_admin` (o `is_superuser`) | todos los de su MM | todos |
+| cualquier otro con `users:manage` | solo aquellos donde es miembro | solo los que él tiene **en ese site** |
+
+Tres reglas, y las tres se comprueban en `routers/users.py`, no en el esquema:
+
+1. **Nadie edita su propio rol ni sus propios permisos.** `PATCH /users/{propio_id}` con
+   `memberships` es `SELF_ROLE_CHANGE_FORBIDDEN` (403) incluso para `mm_admin` y para un
+   superusuario. Sin esta regla, `users:manage` es una escalada de un solo POST.
+2. **Un site fuera del ámbito es de otro inquilino**: `SITE_NOT_FOUND` (404), nunca 403, igual
+   que cualquier otro objeto ajeno. Un usuario que no comparte site con el actor tampoco existe
+   para él (`USER_NOT_FOUND`), ni en el detalle ni en el listado.
+3. **Ninguna concesión supera al que la concede**: `ROLE_PERMISSIONS[rol] | extra_permissions`
+   tiene que ser subconjunto de lo que el actor tiene en ese mismo site, o
+   `ROLE_ESCALATION_FORBIDDEN` / `PERMISSION_ESCALATION_FORBIDDEN` (403).
+
+Al sustituir membresías solo se toca lo que el actor administra: las de otros sites se
+conservan intactas, para que un `site_admin` no pueda dejar a un compañero fuera de una
+delegación ajena omitiéndola de la lista.
+
+## Revalidación de sesión
+
+Los permisos viajan dentro del access token, así que cambiarlos en la base de datos no basta.
+`app/cache.py` guarda una **marca de invalidación por usuario** (`jwt:epoch:{user_id}`) que se
+escribe al desactivar una cuenta, al cambiar rol o permisos, al tocar membresías y al cambiar
+la contraseña; `get_current_context` la contrasta contra el `iat` del token y responde
+`SESSION_STALE` (401). Es una lectura de Redis por petición, la misma forma que la blacklist —
+y, como ella, **falla cerrada**: si Redis no contesta, la petición se deniega.
+
+El token de refresco **no** se contrasta contra la marca: `/auth/refresh` reconstruye los
+claims desde la base de datos, y es así como una sesión legítima recoge sus permisos nuevos en
+lugar de quedarse fuera. Por eso `iat` lleva fracción de segundo (`app/security.py`): con
+segundos enteros no se distingue el token emitido justo antes del cambio del emitido justo
+después, y el refresco honrado se rechazaría también.
+
+Quien añada una escritura que cambie privilegios (nuevas rutas de membresías, desactivación
+masiva, un job de RRHH) tiene que llamar a `invalidate_user_sessions(user_id)`. Si no, el
+cambio no surte efecto hasta 30 minutos después.
+
 ## Errores
 
 ```python

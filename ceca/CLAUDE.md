@@ -41,12 +41,17 @@ Traefik, Docker Compose. El porqué está en `docs/DECISIONES.md` (ADR-001).
 ## 2. Comandos
 
 ```bash
-# Stack local completo
-docker compose up --build
+# Stack local completo. `make` importa: docker-compose.yml por si solo es el stack
+# endurecido de produccion, sin hot reload y con los puertos cerrados. El perfil de
+# desarrollo vive en docker-compose.dev.yml y NO se carga solo, a proposito.
+make up
+
+# Produccion: valida el .env y levanta unicamente el fichero base
+make up-prod
 
 # Migraciones
-docker compose exec api alembic upgrade head
-docker compose exec api alembic revision --autogenerate -m "mensaje"
+make migrate
+make revision m="mensaje"
 
 # Tests
 cd backend && pytest -v

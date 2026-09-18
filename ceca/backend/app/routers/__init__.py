@@ -11,6 +11,7 @@ from urllib.parse import quote
 
 from fastapi import Depends, Query, Request
 
+from app.config import get_settings
 from app.schemas.common import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PageParams
 from app.security import hash_ip
 
@@ -23,10 +24,29 @@ def get_page_params(
 
 
 def client_ip(request: Request) -> str | None:
-    """The caller's address, honouring the single proxy hop we run behind."""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """The caller's address, counted from the right of ``X-Forwarded-For``.
+
+    Every proxy appends the address it saw to the right of the header, so the
+    left-hand entries are whatever the client chose to send. Reading the
+    leftmost element let anyone poison the ``ip_hash`` of the legal access log
+    by sending ``X-Forwarded-For: 8.8.8.8`` (audit E-10).
+
+    ``TRUSTED_PROXY_COUNT`` is the number of proxies we run behind (1 = Traefik
+    only) and it is the same quantity as ``ipStrategy.depth`` in
+    ``infra/traefik/dynamic/middlewares.yml``, which Traefik already uses for the
+    login rate limit. Change one and you must change the other, or the address
+    that is rate-limited stops being the address that is logged. With 0 the
+    header is ignored altogether, for a deployment with no proxy in front.
+
+    A header with fewer hops than expected is truncated rather than trusted: we
+    take the leftmost entry present, never an element a client could have added.
+    """
+    hops = request.headers.get("X-Forwarded-For", "")
+    trusted = get_settings().trusted_proxy_count
+    if trusted > 0 and hops:
+        chain = [hop.strip() for hop in hops.split(",") if hop.strip()]
+        if chain:
+            return chain[-min(trusted, len(chain))]
     return request.client.host if request.client else None
 
 
