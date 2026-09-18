@@ -1,22 +1,32 @@
 import { useForm } from '@tanstack/react-form'
-import { useRef } from 'react'
+import { PencilSimple } from '@phosphor-icons/react'
+import { useRef, type ReactNode } from 'react'
 import { FormErrorSummary } from '@/components/ui/form'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/lib/i18n'
-import type { DecaFieldDefinition } from '@/lib/types'
+import type { DecaFieldRead } from '@/lib/types'
 import { DecaField } from './deca-field'
-import { groupFields, validateAll, validateField, type DecaValues } from './deca-validation'
+import { groupFields, missingRequired } from './deca-catalog'
+import {
+  partiesAreDistinct,
+  validateAll,
+  validateField,
+  type DecaValues,
+} from './deca-validation'
 
 export interface DecaFormProps {
-  fields: DecaFieldDefinition[]
+  fields: DecaFieldRead[]
   initialValues?: DecaValues
   submitLabel: string
   submitting?: boolean
-  /** Errores por campo devueltos por la API (`detail.fields`). */
+  /** Errores por campo devueltos por `POST /deca/validate`. */
   serverErrors?: Record<string, string>
   onSubmit: (values: DecaValues) => void | Promise<void>
-  footer?: React.ReactNode
+  footer?: ReactNode
 }
+
+/** Falta un obligatorio -> `incompleto`, que no bloquea. Lo demas, si. */
+const REQUIRED_KEY = 'deca.validation.required'
 
 export function DecaForm({
   fields,
@@ -27,9 +37,9 @@ export function DecaForm({
   onSubmit,
   footer,
 }: DecaFormProps) {
-  const { t } = useI18n()
+  const { t, pick } = useI18n()
   const containerRef = useRef<HTMLFormElement>(null)
-  const groups = groupFields(fields)
+  const blocks = groupFields(fields)
 
   const defaultValues: DecaValues = Object.fromEntries(
     fields.map((field) => [field.code, initialValues?.[field.code] ?? '']),
@@ -49,12 +59,15 @@ export function DecaForm({
     element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }
 
+  const blockingErrors = (values: DecaValues) =>
+    Object.entries(validateAll(fields, values)).filter(([, issue]) => issue.key !== REQUIRED_KEY)
+
   const summaryErrors = (values: DecaValues) =>
-    Object.entries(validateAll(fields, values)).map(([code, issue]) => {
+    blockingErrors(values).map(([code, issue]) => {
       const definition = fields.find((field) => field.code === code)
       return {
         field: code,
-        label: definition ? (definition.label_es ?? code) : code,
+        label: definition ? pick(definition, 'label') : code,
         message: t(issue.key, issue.params),
       }
     })
@@ -68,8 +81,9 @@ export function DecaForm({
         event.preventDefault()
         event.stopPropagation()
         const values = form.state.values as DecaValues
-        const errors = validateAll(fields, values)
-        const first = Object.keys(errors)[0]
+        // Un dato mal escrito si para; que falte un obligatorio, no:
+        // el documento se archiva y queda `incompleto` (deca-form.md).
+        const first = blockingErrors(values)[0]?.[0]
         if (first) {
           void form.validateAllFields('submit')
           focusField(first)
@@ -90,39 +104,39 @@ export function DecaForm({
         )}
       </form.Subscribe>
 
-      {groups.map((group) => (
-        <fieldset key={group.group} className="rounded-lg border border-border bg-card p-4">
+      {blocks.map((entry) => (
+        <fieldset key={entry.block} className="rounded-lg border border-border bg-card p-4">
           {/* docs/DECA.md §3: cargador y transportista, expresos y diferenciados. */}
           <legend className="px-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            {t(`deca.groups.${group.group}`)}
+            {t(`deca.blocks.${entry.block}`)}
           </legend>
           <p className="mb-4 text-meta text-muted-foreground">
-            {t(`deca.groupHints.${group.group}`)}
+            {t(`deca.blockHints.${entry.block}`)}
           </p>
           <div className="grid gap-4 md:grid-cols-2">
-            {group.fields.map((definition) => (
+            {entry.fields.map((field) => (
               <form.Field
-                key={definition.code}
-                name={definition.code}
+                key={field.code}
+                name={field.code}
                 validators={{
                   // Validacion inline al blur (MASTER §9).
                   onBlur: ({ value }) => {
-                    const issue = validateField(definition, value as string)
+                    const issue = validateField(field, value as string)
                     return issue ? t(issue.key, issue.params) : undefined
                   },
                 }}
               >
-                {(field) => (
+                {(control) => (
                   <DecaField
-                    definition={definition}
-                    value={(field.state.value as string) ?? ''}
+                    field={field}
+                    value={(control.state.value as string) ?? ''}
                     error={
-                      serverErrors?.[definition.code] ??
-                      (field.state.meta.errors[0] as string | undefined) ??
+                      serverErrors?.[field.code] ??
+                      (control.state.meta.errors[0] as string | undefined) ??
                       null
                     }
-                    onChange={(next) => field.handleChange(next)}
-                    onBlur={field.handleBlur}
+                    onChange={(next) => control.handleChange(next)}
+                    onBlur={control.handleBlur}
                   />
                 )}
               </form.Field>
@@ -133,11 +147,36 @@ export function DecaForm({
 
       {footer}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" disabled={submitting}>
-          {submitting ? t('common.saving') : submitLabel}
-        </Button>
-      </div>
+      <form.Subscribe selector={(state) => state.values}>
+        {(values) => {
+          const current = values as DecaValues
+          const missing = missingRequired(fields, current)
+          const sameParty = !partiesAreDistinct(fields, current)
+          return (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="submit" disabled={submitting}>
+                {submitting ? t('common.saving') : submitLabel}
+              </Button>
+
+              {/* Barra de estado: "faltan N" no impide guardar, avisa. */}
+              <p role="status" className="flex items-center gap-1.5 text-sm text-warning-text">
+                {missing.length > 0 ? (
+                  <>
+                    <PencilSimple size={16} aria-hidden="true" />
+                    {t('deca.incompleteNotice', { count: missing.length })}
+                  </>
+                ) : null}
+              </p>
+
+              {sameParty ? (
+                <p role="alert" className="text-sm text-destructive-text">
+                  {t('deca.partiesNotDistinct')}
+                </p>
+              ) : null}
+            </div>
+          )
+        }}
+      </form.Subscribe>
     </form>
   )
 }
