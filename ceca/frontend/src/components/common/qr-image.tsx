@@ -36,7 +36,7 @@ export function QrImage({
       height={size}
       // Reserva el hueco: sin salto de layout cuando carga (CLS < 0.1).
       style={{ width: size, height: size }}
-      className={cn('block bg-white', className)}
+      className={cn('block bg-print-paper', className)}
       alt={t('qr.alt', { name: documentName })}
       loading="lazy"
       decoding="async"

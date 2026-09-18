@@ -7,7 +7,9 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import (
+    UUID as PgUUID,  # noqa: N811 (alias avoids shadowing uuid.UUID)
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, OptimisticLock, TimestampMixin, uuid_pk
@@ -62,16 +64,14 @@ class MM(Base, TimestampMixin):
     tax_id: Mapped[str | None] = mapped_column(String(32))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    sites: Mapped[list["Site"]] = relationship(back_populates="mm")
+    sites: Mapped[list[Site]] = relationship(back_populates="mm")
 
 
 class Site(Base, TimestampMixin):
     """A physical site. The isolation boundary for documents."""
 
     __tablename__ = "sites"
-    __table_args__ = (
-        UniqueConstraint("mm_id", "site_prefix", name="uq_sites_mm_id_site_prefix"),
-    )
+    __table_args__ = (UniqueConstraint("mm_id", "site_prefix", name="uq_sites_mm_id_site_prefix"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
     mm_id: Mapped[uuid.UUID] = mapped_column(
@@ -107,7 +107,7 @@ class User(Base, TimestampMixin, OptimisticLock):
     locale: Mapped[str] = mapped_column(String(5), default="es", nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    memberships: Mapped[list["UserSite"]] = relationship(
+    memberships: Mapped[list[UserSite]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -116,9 +116,7 @@ class UserSite(Base, TimestampMixin):
     """Membership of a user in a site, with the role that grants permissions."""
 
     __tablename__ = "user_sites"
-    __table_args__ = (
-        UniqueConstraint("user_id", "site_id", name="uq_user_sites_user_id_site_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "site_id", name="uq_user_sites_user_id_site_id"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(

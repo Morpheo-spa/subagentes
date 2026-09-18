@@ -7,7 +7,6 @@ permission must still be able to sign in and read their own session.
 
 from __future__ import annotations
 
-import time
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
@@ -34,19 +33,13 @@ from app.schemas.auth import (
     UserSummary,
 )
 from app.schemas.common import Acknowledgement
-from app.security import create_token, decode_token, verify_password
+from app.security import ACCESS, REFRESH, create_token, decode_token, verify_password
 from app.services import audit as audit_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 Membership = tuple[UserSite, Site]
-
-
-
-
-
-
 
 
 async def _user_by_email(db: Db, email: str) -> User | None:
@@ -111,8 +104,8 @@ def _session(user: User, membership: UserSite, site: Site) -> SessionResponse:
     }
     return SessionResponse(
         tokens=TokenPair(
-            access_token=create_token(**claims, token_type="access"),
-            refresh_token=create_token(**claims, token_type="refresh"),
+            access_token=create_token(**claims, token_type=ACCESS),
+            refresh_token=create_token(**claims, token_type=REFRESH),
             expires_in=get_settings().access_token_minutes * 60,
         ),
         user=UserSummary.model_validate(user),
@@ -129,9 +122,7 @@ def _access_payload(request: Request) -> dict[str, Any]:
 
 
 @router.post("/login", response_model=SessionResponse)
-async def login(
-    payload: LoginRequest, db: Db, ip_hash: ClientIpHash
-) -> SessionResponse:
+async def login(payload: LoginRequest, db: Db, ip_hash: ClientIpHash) -> SessionResponse:
     user = await _user_by_email(db, payload.email)
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise DomainError("INVALID_CREDENTIALS", status_code=401)
@@ -156,7 +147,7 @@ async def login(
 
 @router.post("/refresh", response_model=SessionResponse)
 async def refresh(payload: RefreshRequest, db: Db) -> SessionResponse:
-    claims = decode_token(payload.refresh_token, expected_type="refresh")
+    claims = decode_token(payload.refresh_token, expected_type=REFRESH)
     await reject_if_blacklisted(claims)
 
     user = await _active_user(db, uuid.UUID(claims["sub"]))
@@ -180,7 +171,7 @@ async def logout(
 ) -> Acknowledgement:
     await blacklist_token(_access_payload(request))
     if payload.refresh_token:
-        await blacklist_token(decode_token(payload.refresh_token, expected_type="refresh"))
+        await blacklist_token(decode_token(payload.refresh_token, expected_type=REFRESH))
     await audit_service.record(
         db,
         mm_id=ctx.mm_id,
@@ -203,17 +194,13 @@ async def switch_site(
     db: Db,
 ) -> SessionResponse:
     user = await _active_user(db, ctx.user_id)
-    membership, site = _pick_membership(
-        user, await _memberships(db, user), payload.site_id
-    )
+    membership, site = _pick_membership(user, await _memberships(db, user), payload.site_id)
     await blacklist_token(_access_payload(request))
     return _session(user, membership, site)
 
 
 @router.get("/me", response_model=MeResponse)
-async def me(
-    ctx: Annotated[TenantContext, Depends(get_current_context)], db: Db
-) -> MeResponse:
+async def me(ctx: Annotated[TenantContext, Depends(get_current_context)], db: Db) -> MeResponse:
     user = await _active_user(db, ctx.user_id)
     memberships = await _memberships(db, user)
     current, site = _pick_membership(user, memberships, ctx.site_id)

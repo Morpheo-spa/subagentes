@@ -85,6 +85,10 @@
       "es": "El NIF/CIF «{value}» no es válido.",
       "en": "The tax ID \"{value}\" is not valid."
     },
+    "DECA_EDIT_REQUIRES_REVISION": {
+      "es": "Este DeCA lo generamos nosotros: sus datos van impresos en el PDF, así que para cambiarlos hay que crear una revisión indicando el motivo.",
+      "en": "We generated this DeCA: its data is printed on the PDF, so changing it means creating a revision and stating the reason."
+    },
     "DECA_PARTIES_NOT_DISTINCT": {
       "es": "El cargador contractual y el transportista efectivo deben identificarse por separado.",
       "en": "The contracting shipper and the actual carrier must be identified separately."

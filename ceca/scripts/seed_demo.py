@@ -15,13 +15,17 @@ import sys
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 BACKEND = Path(__file__).resolve().parents[1] / "backend"
 sys.path.insert(0, str(BACKEND))
 
 from sqlalchemy import select  # noqa: E402
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.config import get_settings  # noqa: E402
 from app.models import (  # noqa: E402
@@ -41,8 +45,6 @@ from app.models.retention import RetentionAction  # noqa: E402
 from app.models.storage import StorageKind  # noqa: E402
 from app.security import hash_password, new_share_token  # noqa: E402
 
-ModelT = TypeVar("ModelT")
-
 DEMO_PASSWORD = "estampa-demo-2026"  # noqa: S105  (local fixture, never a real secret)
 MM_SLUG = "demo-logistica"
 DEMO_USERS = (
@@ -58,8 +60,12 @@ DEMO_DOCUMENTS = (
 )
 
 
-async def get_or_create(
-    session: AsyncSession, model: type[ModelT], *, match: dict[str, Any], defaults: dict[str, Any]
+async def get_or_create[ModelT](
+    session: AsyncSession,
+    model: type[ModelT],
+    *,
+    match: dict[str, Any],
+    defaults: dict[str, Any],
 ) -> ModelT:
     """Fetch by natural key or insert. The whole script's idempotency lives here."""
     conditions = [getattr(model, field) == value for field, value in match.items()]

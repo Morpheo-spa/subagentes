@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -118,11 +119,7 @@ class DecaValidator:
         given = [value for value in by_party.values() if value]
         if len(given) < len(PARTY_PREFIXES) or len(set(given)) > 1:
             return []
-        return [
-            FieldError(
-                field=list(by_party)[-1], code="DECA_PARTIES_NOT_DISTINCT", params={}
-            )
-        ]
+        return [FieldError(field=list(by_party)[-1], code="DECA_PARTIES_NOT_DISTINCT", params={})]
 
     def _tax_id_code_for(self, prefix: str) -> str | None:
         for spec in self._specs:

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
 from uuid import UUID
 
 import dramatiq
@@ -22,10 +21,8 @@ from app.services.audit import SYSTEM_ACTOR_ID
 broker = RedisBroker(url=str(get_settings().redis_url))
 dramatiq.set_broker(broker)
 
-ResultT = TypeVar("ResultT")
 
-
-def run(operation: Callable[[AsyncSession], Awaitable[ResultT]]) -> ResultT:
+def run[ResultT](operation: Callable[[AsyncSession], Awaitable[ResultT]]) -> ResultT:
     """Run one async unit of work in its own session, from a synchronous actor."""
 
     async def _run() -> ResultT:

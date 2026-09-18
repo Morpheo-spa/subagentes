@@ -1,0 +1,109 @@
+name: Estampa (ceca) CI
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - "ceca/**"
+      - ".github/workflows/ceca-ci.yml"
+  pull_request:
+    paths:
+      - "ceca/**"
+      - ".github/workflows/ceca-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ceca-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: ceca
+
+jobs:
+  gate:
+    name: scripts/ci.sh
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: estampa
+          POSTGRES_PASSWORD: estampa
+          POSTGRES_DB: estampa_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U estampa -d estampa_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      # The suite runs against the Postgres service; drop TEST_DATABASE_URL to use SQLite.
+      TEST_DATABASE_URL: postgresql+asyncpg://estampa:estampa@localhost:5433/estampa_test
+      TEST_REDIS_URL: redis://localhost:6380/1
+      DATABASE_URL: postgresql+asyncpg://estampa:estampa@localhost:5433/estampa_test
+      REDIS_URL: redis://localhost:6380/1
+      ENVIRONMENT: local
+      DEBUG: "false"
+      BILLING_ENABLED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Generate the test secrets
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import secrets
+          from base64 import urlsafe_b64encode
+          print(f"JWT_SECRET_KEY={secrets.token_urlsafe(48)}")
+          print(f"STORAGE_SECRET_KEY={urlsafe_b64encode(secrets.token_bytes(32)).decode()}")
+          print(f"ACCESS_LOG_IP_SALT={secrets.token_urlsafe(24)}")
+          PY
+
+      - name: Install the backend
+        working-directory: ceca/backend
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -r pyproject.toml
+          uv pip install --python .venv/bin/python pytest pytest-asyncio aiosqlite ruff mypy bandit faker
+
+      - name: Apply the migrations
+        working-directory: ceca/backend
+        run: .venv/bin/python -m alembic upgrade head
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ceca/frontend/package-lock.json
+
+      - name: Install the frontend
+        working-directory: ceca/frontend
+        run: npm ci --no-audit --no-fund
+        continue-on-error: true
+
+      - name: Run the gate
+        run: bash scripts/ci.sh

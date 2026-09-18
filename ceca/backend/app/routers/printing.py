@@ -34,15 +34,11 @@ QueueCtx = Annotated[TenantContext, Depends(require_permission("printing:queue")
 PrintCtx = Annotated[TenantContext, Depends(require_permission("printing:print"))]
 
 
-async def _queue_page(
-    db: Db, ctx: TenantContext, page: PageParams
-) -> PageResponse[QueueItemRead]:
+async def _queue_page(db: Db, ctx: TenantContext, page: PageParams) -> PageResponse[QueueItemRead]:
     rows, total = await printing_service.list_queue(
         db, ctx, user_id=ctx.user_id, offset=page.offset, limit=page.limit
     )
-    return PageResponse.of(
-        [QueueItemRead.model_validate(row) for row in rows], total, page
-    )
+    return PageResponse.of([QueueItemRead.model_validate(row) for row in rows], total, page)
 
 
 async def _job_read(db: Db, ctx: TenantContext, job_id: uuid.UUID) -> PrintJobRead:
@@ -92,9 +88,7 @@ async def add_to_queue(
 async def reorder_queue(
     payload: QueueReorderRequest, ctx: QueueCtx, db: Db, page: Page
 ) -> PageResponse[QueueItemRead]:
-    await printing_service.reorder_queue(
-        db, ctx, user_id=ctx.user_id, item_ids=payload.item_ids
-    )
+    await printing_service.reorder_queue(db, ctx, user_id=ctx.user_id, item_ids=payload.item_ids)
     return await _queue_page(db, ctx, page)
 
 
@@ -105,12 +99,8 @@ async def clear_queue(ctx: QueueCtx, db: Db) -> Acknowledgement:
 
 
 @router.delete("/queue/{item_id}", response_model=Acknowledgement)
-async def remove_from_queue(
-    item_id: uuid.UUID, ctx: QueueCtx, db: Db
-) -> Acknowledgement:
-    await printing_service.remove_from_queue(
-        db, ctx, user_id=ctx.user_id, item_id=item_id
-    )
+async def remove_from_queue(item_id: uuid.UUID, ctx: QueueCtx, db: Db) -> Acknowledgement:
+    await printing_service.remove_from_queue(db, ctx, user_id=ctx.user_id, item_id=item_id)
     return Acknowledgement()
 
 
@@ -134,19 +124,13 @@ async def list_jobs(ctx: ReadCtx, db: Db, page: Page) -> PageResponse[PrintJobRe
     total = await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = (
         await db.execute(
-            stmt.order_by(PrintJob.created_at.desc())
-            .offset(page.offset)
-            .limit(page.limit)
+            stmt.order_by(PrintJob.created_at.desc()).offset(page.offset).limit(page.limit)
         )
     ).scalars()
-    return PageResponse.of(
-        [PrintJobRead.model_validate(row) for row in rows], total, page
-    )
+    return PageResponse.of([PrintJobRead.model_validate(row) for row in rows], total, page)
 
 
-@router.post(
-    "/jobs/", response_model=PrintJobRead, status_code=status.HTTP_201_CREATED
-)
+@router.post("/jobs/", response_model=PrintJobRead, status_code=status.HTTP_201_CREATED)
 async def create_job(
     payload: PrintJobCreate, ctx: PrintCtx, db: Db, ip_hash: ClientIpHash
 ) -> PrintJobRead:

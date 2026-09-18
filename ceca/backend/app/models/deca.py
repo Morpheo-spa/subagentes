@@ -15,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin
 
 
-class DecaFieldType(str, enum.Enum):
+class DecaFieldType(enum.StrEnum):
     STRING = "string"
     TEXT = "text"
     NUMBER = "number"

@@ -88,11 +88,7 @@ def _collect_raise_sites() -> list[RaiseSite]:
 
 
 def _placeholders(template: str) -> set[str]:
-    return {
-        name
-        for _, name, _, _ in string.Formatter().parse(template)
-        if name
-    }
+    return {name for _, name, _, _ in string.Formatter().parse(template) if name}
 
 
 RAISE_SITES = _collect_raise_sites()

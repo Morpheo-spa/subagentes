@@ -94,8 +94,6 @@ async def stream_document(
         media_type="application/pdf",
         headers={
             **PUBLIC_HEADERS,
-            "Content-Disposition": content_disposition(
-                "inline", document.original_filename
-            ),
+            "Content-Disposition": content_disposition("inline", document.original_filename),
         },
     )

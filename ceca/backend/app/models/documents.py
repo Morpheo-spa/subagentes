@@ -18,27 +18,29 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import (
+    UUID as PgUUID,  # noqa: N811 (alias avoids shadowing uuid.UUID)
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, OptimisticLock, TenantScoped, TimestampMixin, uuid_pk
 
 
-class DocumentStatus(str, enum.Enum):
-    PENDING = "pending"        # row created, bytes not yet stored
+class DocumentStatus(enum.StrEnum):
+    PENDING = "pending"  # row created, bytes not yet stored
     PROCESSING = "processing"  # hashing, QR, upload to backend
     READY = "ready"
-    WITHDRAWN = "withdrawn"    # file removed by retention; record kept
+    WITHDRAWN = "withdrawn"  # file removed by retention; record kept
     FAILED = "failed"
 
 
-class DecaStatus(str, enum.Enum):
+class DecaStatus(enum.StrEnum):
     COMPLETE = "completo"
     INCOMPLETE = "incompleto"
     NOT_APPLICABLE = "no_aplica"
 
 
-class DocumentOrigin(str, enum.Enum):
+class DocumentOrigin(enum.StrEnum):
     """How the PDF came to exist, which decides whether it can be a valid DeCA."""
 
     #: Rendered by us from structured DECA data. The compliant path.
@@ -49,7 +51,7 @@ class DocumentOrigin(str, enum.Enum):
     UPLOADED_SCANNED = "uploaded_scanned"
 
 
-class ComplianceStatus(str, enum.Enum):
+class ComplianceStatus(enum.StrEnum):
     """Whether this file can stand as a DeCA under the 2026 Resolution."""
 
     COMPLIANT = "compliant"
@@ -77,7 +79,8 @@ class Document(Base, TenantScoped, TimestampMixin, OptimisticLock):
     id: Mapped[uuid.UUID] = uuid_pk()
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     storage_backend_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("storage_backends.id", ondelete="RESTRICT"),
+        PgUUID(as_uuid=True),
+        ForeignKey("storage_backends.id", ondelete="RESTRICT"),
         nullable=False,
     )
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -127,7 +130,7 @@ class Document(Base, TenantScoped, TimestampMixin, OptimisticLock):
     withdrawn_reason: Mapped[str | None] = mapped_column(String(255))
     print_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    share_tokens: Mapped[list["ShareToken"]] = relationship(
+    share_tokens: Mapped[list[ShareToken]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
 
@@ -185,8 +188,6 @@ class DocumentAccess(Base):
     share_token_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("share_tokens.id", ondelete="SET NULL")
     )
-    accessed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    accessed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ip_hash: Mapped[str | None] = mapped_column(String(64))
     user_agent: Mapped[str | None] = mapped_column(Text)

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -70,8 +70,8 @@ class PublicViewerHeadersMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings.require_billing_config()
     logger.info(
-        "estampa starting", extra={"environment": settings.environment,
-                                   "billing_enabled": settings.billing_enabled}
+        "estampa starting",
+        extra={"environment": settings.environment, "billing_enabled": settings.billing_enabled},
     )
     try:
         yield
@@ -108,9 +108,7 @@ def create_app() -> FastAPI:
         )
 
     @app.exception_handler(RequestValidationError)
-    async def _validation_error(
-        request: Request, exc: RequestValidationError
-    ) -> JSONResponse:
+    async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         language = negotiate_language(request.headers.get("Accept-Language"))
         return JSONResponse(
             status_code=422,

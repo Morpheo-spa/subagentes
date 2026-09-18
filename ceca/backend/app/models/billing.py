@@ -8,13 +8,15 @@ from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import (
+    UUID as PgUUID,  # noqa: N811 (alias avoids shadowing uuid.UUID)
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, OptimisticLock, TimestampMixin, uuid_pk
 
 
-class SubscriptionStatus(str, enum.Enum):
+class SubscriptionStatus(enum.StrEnum):
     TRIALING = "trialing"
     ACTIVE = "active"
     PAST_DUE = "past_due"
@@ -23,7 +25,7 @@ class SubscriptionStatus(str, enum.Enum):
     DISABLED = "disabled"
 
 
-class BillingProvider(str, enum.Enum):
+class BillingProvider(enum.StrEnum):
     STRIPE = "stripe"
     MANUAL = "manual"
 

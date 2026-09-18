@@ -89,11 +89,7 @@ def is_valid_fernet_key(value: str) -> bool:
 
 
 def check_required(env: dict[str, str]) -> list[str]:
-    return [
-        f"{key}: missing or empty"
-        for key in REQUIRED_KEYS
-        if not env.get(key, "").strip()
-    ]
+    return [f"{key}: missing or empty" for key in REQUIRED_KEYS if not env.get(key, "").strip()]
 
 
 def check_secrets(env: dict[str, str]) -> list[str]:
@@ -133,7 +129,7 @@ def check_storage_key(env: dict[str, str]) -> list[str]:
     if value and not is_valid_fernet_key(value):
         return [
             "STORAGE_SECRET_KEY: not a valid Fernet key "
-            "(python -c \"from cryptography.fernet import Fernet; "
+            '(python -c "from cryptography.fernet import Fernet; '
             'print(Fernet.generate_key().decode())")'
         ]
     return []

@@ -2,7 +2,8 @@
 SHELL := /bin/bash
 .ONESHELL:
 COMPOSE := docker compose
-PY := python3
+# Prefer the backend virtualenv when it exists, like scripts/ci.sh does.
+PY := $(shell [ -x backend/.venv/bin/python ] && echo backend/.venv/bin/python || echo python3)
 
 .PHONY: help
 help: ## Show this help
@@ -21,14 +22,11 @@ secrets: env ## Replace the CHANGE_ME placeholders in .env with fresh secrets
 	from cryptography.fernet import Fernet
 	path = pathlib.Path(".env")
 	text = path.read_text(encoding="utf-8")
-	values = {
-	    "JWT_SECRET_KEY": secrets.token_urlsafe(48),
-	    "STORAGE_SECRET_KEY": Fernet.generate_key().decode(),
-	    "ACCESS_LOG_IP_SALT": secrets.token_urlsafe(24),
-	    "MINIO_ROOT_PASSWORD": secrets.token_urlsafe(18),
-	}
-	for key, value in values.items():
-	    text = re.sub(rf"(?m)^{key}=CHANGE_ME.*$$", f"{key}={value}", text)
+	fill = lambda body, key, value: re.sub(rf"(?m)^{key}=CHANGE_ME.*$$", f"{key}={value}", body)
+	text = fill(text, "JWT_SECRET_KEY", secrets.token_urlsafe(48))
+	text = fill(text, "STORAGE_SECRET_KEY", Fernet.generate_key().decode())
+	text = fill(text, "ACCESS_LOG_IP_SALT", secrets.token_urlsafe(24))
+	text = fill(text, "MINIO_ROOT_PASSWORD", secrets.token_urlsafe(18))
 	path.write_text(text, encoding="utf-8")
 	print("secrets written to .env")
 	PYCODE

@@ -47,9 +47,7 @@ async def list_plans(ctx: ReadCtx, db: Db) -> PlansResponse:
     if not billing_service.is_enabled():
         return PlansResponse(enabled=False)
     plans = await billing_service.list_plans(db)
-    return PlansResponse(
-        enabled=True, items=[PlanRead.model_validate(plan) for plan in plans]
-    )
+    return PlansResponse(enabled=True, items=[PlanRead.model_validate(plan) for plan in plans])
 
 
 @router.get("/subscription", response_model=SubscriptionResponse)
@@ -93,9 +91,7 @@ async def create_checkout(
     payload: CheckoutRequest, ctx: ManageCtx, db: Db
 ) -> CheckoutSessionResponse:
     _require_enabled()
-    session = await billing_service.create_checkout_session(
-        db, ctx, plan_code=payload.plan_code
-    )
+    session = await billing_service.create_checkout_session(db, ctx, plan_code=payload.plan_code)
     return CheckoutSessionResponse.model_validate(session)
 
 

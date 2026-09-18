@@ -144,7 +144,10 @@ async def test_the_two_parties_must_be_told_apart(validator) -> None:  # noqa: A
     reason="documents service not written yet",
 )
 async def test_an_incomplete_note_is_stored_as_incompleto(
-    db, validator, make_tenant, make_document  # noqa: ANN001
+    db,
+    validator,
+    make_tenant,
+    make_document,  # noqa: ANN001
 ) -> None:
     """The upload goes through; the status carries the bad news."""
     from app.models.documents import DecaStatus

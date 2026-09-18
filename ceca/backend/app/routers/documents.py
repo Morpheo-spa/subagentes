@@ -122,14 +122,10 @@ async def list_documents(
     rows, total = await documents_service.list_documents(
         db, ctx, filters=filters, offset=page.offset, limit=page.limit
     )
-    return PageResponse.of(
-        [DocumentSummary.model_validate(row) for row in rows], total, page
-    )
+    return PageResponse.of([DocumentSummary.model_validate(row) for row in rows], total, page)
 
 
-@router.post(
-    "/", response_model=UploadResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_documents(
     ctx: CreateCtx,
     db: Db,
@@ -180,14 +176,10 @@ async def upload_documents(
         )
 
     accepted = sum(1 for item in items if item.accepted)
-    return UploadResponse(
-        items=items, accepted=accepted, rejected=len(items) - accepted
-    )
+    return UploadResponse(items=items, accepted=accepted, rejected=len(items) - accepted)
 
 
-@router.post(
-    "/generate", response_model=DocumentRead, status_code=status.HTTP_201_CREATED
-)
+@router.post("/generate", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
 async def generate_document(
     payload: DocumentGenerateRequest,
     ctx: CreateCtx,
@@ -329,9 +321,7 @@ async def document_qr_svg(document_id: uuid.UUID, ctx: ReadCtx, db: Db) -> Respo
 
 
 @router.get("/{document_id}/file")
-async def download_document(
-    document_id: uuid.UUID, ctx: ReadCtx, db: Db
-) -> StreamingResponse:
+async def download_document(document_id: uuid.UUID, ctx: ReadCtx, db: Db) -> StreamingResponse:
     """Authenticated streaming. The storage backend is never exposed."""
     document = await documents_service.get_document(db, ctx, document_id)
     stream = await documents_service.open_stream(db, document)
@@ -339,18 +329,14 @@ async def download_document(
         stream,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": content_disposition(
-                "inline", document.original_filename
-            ),
+            "Content-Disposition": content_disposition("inline", document.original_filename),
             "Cache-Control": "no-store",
         },
     )
 
 
 @router.get("/{document_id}/history", response_model=DocumentHistoryResponse)
-async def document_history(
-    document_id: uuid.UUID, ctx: ReadCtx, db: Db
-) -> DocumentHistoryResponse:
+async def document_history(document_id: uuid.UUID, ctx: ReadCtx, db: Db) -> DocumentHistoryResponse:
     """Revisions, printed copies and public QR scans, in one place."""
     history = await documents_service.history(db, ctx, document_id)
     return DocumentHistoryResponse.model_validate(history)

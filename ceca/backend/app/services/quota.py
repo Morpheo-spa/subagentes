@@ -34,11 +34,20 @@ def current_period(moment: datetime | None = None) -> str:
     return (moment or datetime.now(UTC)).strftime("%Y-%m")
 
 
-async def limits_for(db: AsyncSession, mm_id: UUID) -> dict:
+Owner = TenantContext | UUID
+
+
+def owner_mm_id(owner: Owner) -> UUID:
+    """Accepts the tenant context or a bare company id. Never a request body."""
+    return owner.mm_id if isinstance(owner, TenantContext) else owner
+
+
+async def limits_for(db: AsyncSession, owner: Owner) -> dict:
     """The plan's limits with the subscription's overrides applied on top."""
     if not get_settings().billing_enabled:
         return dict(DEFAULT_LIMITS)
 
+    mm_id = owner_mm_id(owner)
     subscription = await _subscription(db, mm_id)
     if subscription is None:
         return dict(DEFAULT_LIMITS)
@@ -51,28 +60,30 @@ async def limits_for(db: AsyncSession, mm_id: UUID) -> dict:
 
 
 async def check_can_upload(
-    db: AsyncSession, ctx: TenantContext, *, byte_size: int, file_count: int = 1
+    db: AsyncSession,
+    ctx: TenantContext,
+    *,
+    byte_size: int = 0,
+    count: int = 1,
+    file_count: int | None = None,
 ) -> None:
+    """Refuse a batch that would cross a plan limit, before a byte is stored."""
     if not get_settings().billing_enabled:
         return
 
-    limits = await limits_for(db, ctx.mm_id)
+    documents = file_count if file_count is not None else count
+    limits = await limits_for(db, ctx)
     period = current_period()
     counter = await _counter(db, ctx.mm_id, period)
     used_documents = counter.documents_uploaded if counter else 0
     used_bytes = counter.bytes_stored if counter else 0
 
     documents_limit = int(limits.get("documents_per_month", UNLIMITED))
-    if documents_limit != UNLIMITED and used_documents + file_count > documents_limit:
-        raise QuotaExceededError(
-            "QUOTA_DOCUMENTS_EXCEEDED", limit=documents_limit, period=period
-        )
+    if documents_limit != UNLIMITED and used_documents + documents > documents_limit:
+        raise QuotaExceededError("QUOTA_DOCUMENTS_EXCEEDED", limit=documents_limit, period=period)
 
     storage_limit_gb = int(limits.get("storage_gb", UNLIMITED))
-    if (
-        storage_limit_gb != UNLIMITED
-        and used_bytes + byte_size > storage_limit_gb * BYTES_PER_GB
-    ):
+    if storage_limit_gb != UNLIMITED and used_bytes + byte_size > storage_limit_gb * BYTES_PER_GB:
         raise QuotaExceededError("QUOTA_STORAGE_EXCEEDED", limit_gb=storage_limit_gb)
 
 
@@ -118,7 +129,5 @@ async def _subscription(db: AsyncSession, mm_id: UUID) -> Subscription | None:
 
 
 async def _counter(db: AsyncSession, mm_id: UUID, period: str) -> UsageCounter | None:
-    stmt = select(UsageCounter).where(
-        UsageCounter.mm_id == mm_id, UsageCounter.period == period
-    )
+    stmt = select(UsageCounter).where(UsageCounter.mm_id == mm_id, UsageCounter.period == period)
     return (await db.execute(stmt)).scalars().first()

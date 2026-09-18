@@ -35,9 +35,7 @@ async def _get_site(db: Db, ctx: TenantContext, site_id: uuid.UUID) -> Site:
     return site
 
 
-async def _audit(
-    db: Db, ctx: TenantContext, site: Site, action: str, ip_hash: str | None
-) -> None:
+async def _audit(db: Db, ctx: TenantContext, site: Site, action: str, ip_hash: str | None) -> None:
     await audit_service.record(
         db,
         mm_id=ctx.mm_id,
@@ -67,22 +65,16 @@ async def list_sites(
 
     total = await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = (
-        await db.execute(
-            stmt.order_by(Site.name).offset(page.offset).limit(page.limit)
-        )
+        await db.execute(stmt.order_by(Site.name).offset(page.offset).limit(page.limit))
     ).scalars()
-    return PageResponse.of(
-        [SiteRead.model_validate(site) for site in rows], total, page
-    )
+    return PageResponse.of([SiteRead.model_validate(site) for site in rows], total, page)
 
 
 @router.post("/", response_model=SiteRead, status_code=status.HTTP_201_CREATED)
 async def create_site(
     payload: SiteCreate, ctx: ManageCtx, db: Db, ip_hash: ClientIpHash
 ) -> SiteRead:
-    taken = await db.scalar(
-        _company_sites(ctx).where(Site.site_prefix == payload.site_prefix)
-    )
+    taken = await db.scalar(_company_sites(ctx).where(Site.site_prefix == payload.site_prefix))
     if taken is not None:
         raise ConflictError("SITE_PREFIX_TAKEN", site_prefix=payload.site_prefix)
 

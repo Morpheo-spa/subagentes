@@ -41,9 +41,7 @@ def _assert_above_legal_minimum(days: int | None) -> None:
         raise DomainError("RETENTION_BELOW_LEGAL_MINIMUM", minimum_days=minimum)
 
 
-async def _get_policy(
-    db: Db, ctx: TenantContext, policy_id: uuid.UUID
-) -> RetentionPolicy:
+async def _get_policy(db: Db, ctx: TenantContext, policy_id: uuid.UUID) -> RetentionPolicy:
     stmt = scoped_select(RetentionPolicy, ctx).where(RetentionPolicy.id == policy_id)
     policy = (await db.execute(stmt)).scalar_one_or_none()
     if policy is None:
@@ -51,9 +49,7 @@ async def _get_policy(
     return policy
 
 
-async def _demote_other_defaults(
-    db: Db, ctx: TenantContext, keep_id: uuid.UUID
-) -> None:
+async def _demote_other_defaults(db: Db, ctx: TenantContext, keep_id: uuid.UUID) -> None:
     await db.execute(
         update(RetentionPolicy)
         .where(
@@ -97,15 +93,11 @@ async def list_upcoming(
     rows, total = await retention_service.upcoming_expiries(
         db, ctx, within_days=within_days, offset=page.offset, limit=page.limit
     )
-    return PageResponse.of(
-        [UpcomingExpiryItem.model_validate(row) for row in rows], total, page
-    )
+    return PageResponse.of([UpcomingExpiryItem.model_validate(row) for row in rows], total, page)
 
 
 @router.get("/", response_model=PageResponse[RetentionPolicyRead])
-async def list_policies(
-    ctx: ReadCtx, db: Db, page: Page
-) -> PageResponse[RetentionPolicyRead]:
+async def list_policies(ctx: ReadCtx, db: Db, page: Page) -> PageResponse[RetentionPolicyRead]:
     stmt = scoped_select(RetentionPolicy, ctx)
     total = await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = (
@@ -118,16 +110,12 @@ async def list_policies(
     return PageResponse.of([_read(row) for row in rows], total, page)
 
 
-@router.post(
-    "/", response_model=RetentionPolicyRead, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=RetentionPolicyRead, status_code=status.HTTP_201_CREATED)
 async def create_policy(
     payload: RetentionPolicyCreate, ctx: ManageCtx, db: Db, ip_hash: ClientIpHash
 ) -> RetentionPolicyRead:
     _assert_above_legal_minimum(payload.retention_days)
-    policy = RetentionPolicy(
-        mm_id=ctx.mm_id, site_id=ctx.site_id, **payload.model_dump()
-    )
+    policy = RetentionPolicy(mm_id=ctx.mm_id, site_id=ctx.site_id, **payload.model_dump())
     db.add(policy)
     await db.flush()
     if policy.is_default:
@@ -137,9 +125,7 @@ async def create_policy(
 
 
 @router.get("/{policy_id}", response_model=RetentionPolicyRead)
-async def get_policy(
-    policy_id: uuid.UUID, ctx: ReadCtx, db: Db
-) -> RetentionPolicyRead:
+async def get_policy(policy_id: uuid.UUID, ctx: ReadCtx, db: Db) -> RetentionPolicyRead:
     return _read(await _get_policy(db, ctx, policy_id))
 
 
@@ -156,9 +142,7 @@ async def update_policy(
         raise ConflictError("VERSION_CONFLICT")
     _assert_above_legal_minimum(payload.retention_days)
 
-    for field, value in payload.model_dump(
-        exclude_unset=True, exclude={"version"}
-    ).items():
+    for field, value in payload.model_dump(exclude_unset=True, exclude={"version"}).items():
         setattr(policy, field, value)
     await db.flush()
     if policy.is_default:

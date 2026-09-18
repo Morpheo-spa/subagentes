@@ -41,7 +41,4 @@ ClientIpHash = Annotated[str | None, Depends(get_client_ip_hash)]
 def content_disposition(disposition: str, filename: str) -> str:
     """RFC 5987 header value, so accented delivery note names survive."""
     ascii_name = filename.encode("ascii", "replace").decode("ascii").replace('"', "_")
-    return (
-        f'{disposition}; filename="{ascii_name}"; '
-        f"filename*=UTF-8''{quote(filename, safe='')}"
-    )
+    return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename, safe='')}"

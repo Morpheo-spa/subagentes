@@ -50,6 +50,10 @@ class LabelTemplate:
         return self.rows * self.columns
 
     @property
+    def slots_per_sheet(self) -> int:
+        return self.slots
+
+    @property
     def qr_mm(self) -> float:
         return max(MIN_QR_MM, min(self.label_width_mm, self.label_height_mm) * 0.6)
 
@@ -106,20 +110,22 @@ async def add_to_queue(
     ctx: TenantContext,
     *,
     document_ids: list[UUID],
+    user_id: UUID | None = None,
     copies: int = 1,
 ) -> list[PrintQueueItem]:
     if copies < 1:
         raise DomainError("PRINT_COPIES_INVALID", copies=copies)
 
+    owner = user_id or ctx.user_id
     documents = await _documents_of(db, ctx, document_ids)
-    position = await _next_position(db, ctx)
+    position = await _next_position(db, ctx, owner)
 
     items = []
     for offset, document in enumerate(documents):
         item = PrintQueueItem(
             mm_id=ctx.mm_id,
             site_id=ctx.site_id,
-            user_id=ctx.user_id,
+            user_id=owner,
             document_id=document.id,
             copies=copies,
             position=position + offset,
@@ -130,30 +136,53 @@ async def add_to_queue(
     return items
 
 
-async def list_queue(db: AsyncSession, ctx: TenantContext) -> list[PrintQueueItem]:
-    stmt = (
-        scoped_select(PrintQueueItem, ctx)
-        .where(PrintQueueItem.user_id == ctx.user_id)
-        .order_by(PrintQueueItem.position, PrintQueueItem.created_at)
+async def list_queue(
+    db: AsyncSession,
+    ctx: TenantContext,
+    *,
+    user_id: UUID | None = None,
+    offset: int | None = None,
+    limit: int | None = None,
+) -> tuple[list[PrintQueueItem], int]:
+    """One page of the caller's own queue, plus how many labels it holds."""
+    owner = user_id or ctx.user_id
+    base = scoped_select(PrintQueueItem, ctx).where(PrintQueueItem.user_id == owner)
+    total = await db.scalar(
+        scoped(select(func.count(PrintQueueItem.id)), ctx, PrintQueueItem).where(
+            PrintQueueItem.user_id == owner
+        )
     )
-    return list((await db.execute(stmt)).scalars().all())
+    stmt = base.order_by(PrintQueueItem.position, PrintQueueItem.created_at)
+    if offset is not None:
+        stmt = stmt.offset(offset)
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    return list((await db.execute(stmt)).scalars().all()), int(total or 0)
 
 
 async def remove_from_queue(
-    db: AsyncSession, ctx: TenantContext, *, item_id: UUID
+    db: AsyncSession,
+    ctx: TenantContext,
+    *,
+    item_id: UUID,
+    user_id: UUID | None = None,
 ) -> None:
-    item = await _queue_item(db, ctx, item_id)
+    item = await _queue_item(db, ctx, item_id, user_id or ctx.user_id)
     await db.delete(item)
     await db.flush()
 
 
 async def reorder_queue(
-    db: AsyncSession, ctx: TenantContext, *, item_ids: list[UUID]
+    db: AsyncSession,
+    ctx: TenantContext,
+    *,
+    item_ids: list[UUID],
+    user_id: UUID | None = None,
 ) -> None:
     """Positions follow the order given. Every id must be in the caller's queue."""
-    items = {item.id: item for item in await list_queue(db, ctx)}
-    unknown = [item_id for item_id in item_ids if item_id not in items]
-    if unknown:
+    rows, _ = await list_queue(db, ctx, user_id=user_id)
+    items = {item.id: item for item in rows}
+    if any(item_id not in items for item_id in item_ids):
         raise NotFoundError("PRINT_QUEUE_ITEM_NOT_FOUND")
 
     for position, item_id in enumerate(item_ids):
@@ -161,8 +190,9 @@ async def reorder_queue(
     await db.flush()
 
 
-async def clear_queue(db: AsyncSession, ctx: TenantContext) -> None:
-    for item in await list_queue(db, ctx):
+async def clear_queue(db: AsyncSession, ctx: TenantContext, *, user_id: UUID | None = None) -> None:
+    rows, _ = await list_queue(db, ctx, user_id=user_id)
+    for item in rows:
         await db.delete(item)
     await db.flush()
 
@@ -171,12 +201,15 @@ async def create_job(
     db: AsyncSession,
     ctx: TenantContext,
     *,
-    printer_name: str | None,
-    layout: PrintLayout,
     template_code: str,
-    start_position: int,
+    printer_name: str | None = None,
+    start_position: int = 1,
+    item_ids: list[UUID] | None = None,
+    user_id: UUID | None = None,
+    layout: PrintLayout | None = None,
+    ip_hash: str | None = None,
 ) -> PrintJob:
-    """Turn the queue into a traced job and empty it.
+    """Turn the queue into a traced job and empty what it consumed.
 
     Consumption is metered here, when the labels are dispatched.
     ``Document.print_count`` only moves once the run is confirmed.
@@ -184,7 +217,11 @@ async def create_job(
     template = template_for(template_code)
     _reject_bad_start(template, start_position)
 
-    queued = await list_queue(db, ctx)
+    owner = user_id or ctx.user_id
+    queued, _ = await list_queue(db, ctx, user_id=owner)
+    if item_ids is not None:
+        wanted = set(item_ids)
+        queued = [item for item in queued if item.id in wanted]
     if not queued:
         raise DomainError("PRINT_QUEUE_EMPTY")
 
@@ -192,9 +229,9 @@ async def create_job(
     job = PrintJob(
         mm_id=ctx.mm_id,
         site_id=ctx.site_id,
-        user_id=ctx.user_id,
+        user_id=owner,
         printer_name=printer_name,
-        layout=PrintLayout(layout),
+        layout=PrintLayout(layout) if layout else template.layout,
         template_code=template.code,
         start_position=start_position,
         label_count=label_count,
@@ -215,19 +252,20 @@ async def create_job(
             )
         )
         index += item.copies
+        await db.delete(item)
     await db.flush()
 
-    await clear_queue(db, ctx)
     await quota.record_prints(db, ctx, labels=label_count)
     await audit.record(
         db,
         mm_id=ctx.mm_id,
         site_id=ctx.site_id,
-        actor_user_id=ctx.user_id,
+        actor_user_id=owner,
         action="print_job.created",
         object_type="print_job",
         object_id=job.id,
         payload={"labels": label_count, "template": template.code},
+        ip_hash=ip_hash,
     )
     return job
 
@@ -235,21 +273,25 @@ async def create_job(
 async def confirm_job(
     db: AsyncSession,
     ctx: TenantContext,
-    *,
     job_id: UUID,
-    ok: bool,
+    *,
+    success: bool = True,
+    ok: bool | None = None,
     failure_reason: str | None = None,
+    actor_user_id: UUID | None = None,
+    ip_hash: str | None = None,
 ) -> PrintJob:
     """Close a run. A closed job never reopens; a reprint is a new job."""
     job = await _job(db, ctx, job_id)
     if PrintJobStatus(job.status) is not PrintJobStatus.PENDING:
         raise DomainError("PRINT_JOB_ALREADY_CLOSED")
 
-    job.status = PrintJobStatus.PRINTED if ok else PrintJobStatus.FAILED
+    succeeded = success if ok is None else ok
+    job.status = PrintJobStatus.PRINTED if succeeded else PrintJobStatus.FAILED
     job.confirmed_at = datetime.now(UTC)
-    job.failure_reason = None if ok else failure_reason
+    job.failure_reason = None if succeeded else failure_reason
 
-    if ok:
+    if succeeded:
         await _increment_print_counts(db, ctx, job)
     await db.flush()
 
@@ -257,18 +299,31 @@ async def confirm_job(
         db,
         mm_id=ctx.mm_id,
         site_id=ctx.site_id,
-        actor_user_id=ctx.user_id,
-        action="print_job.confirmed" if ok else "print_job.failed",
+        actor_user_id=actor_user_id or ctx.user_id,
+        action="print_job.confirmed" if succeeded else "print_job.failed",
         object_type="print_job",
         object_id=job.id,
         payload={"failure_reason": job.failure_reason},
+        ip_hash=ip_hash,
     )
     return job
 
 
-async def labels_for_job(
-    db: AsyncSession, ctx: TenantContext, job: PrintJob
-) -> list[dict]:
+async def render_labels_html(
+    db: AsyncSession,
+    ctx: TenantContext,
+    job_id: UUID,
+    *,
+    language: str = "es",
+) -> str:
+    """Print-ready HTML for a job the browser is about to print."""
+    job = await _job(db, ctx, job_id)
+    template = template_for(job.template_code)
+    labels = await labels_for_job(db, ctx, job)
+    return render_labels(job, labels, template, language=language)
+
+
+async def labels_for_job(db: AsyncSession, ctx: TenantContext, job: PrintJob) -> list[dict]:
     """Expand a job into one dict per physical label, ready for rendering."""
     stmt = (
         select(PrintJobItem)
@@ -278,9 +333,7 @@ async def labels_for_job(
     items = (await db.execute(stmt)).scalars().all()
     documents = {
         document.id: document
-        for document in await _documents_of(
-            db, ctx, [item.document_id for item in items]
-        )
+        for document in await _documents_of(db, ctx, [item.document_id for item in items])
     }
 
     labels: list[dict] = []
@@ -309,7 +362,7 @@ def template_for(template_code: str) -> LabelTemplate:
     return template
 
 
-def render_labels_html(
+def render_labels(
     job: PrintJob,
     labels: list[dict],
     template: LabelTemplate,
@@ -339,26 +392,24 @@ async def _documents_of(
     if not document_ids:
         return []
     stmt = scoped_select(Document, ctx).where(Document.id.in_(set(document_ids)))
-    found = {
-        document.id: document for document in (await db.execute(stmt)).scalars().all()
-    }
+    found = {document.id: document for document in (await db.execute(stmt)).scalars().all()}
     if len(found) != len(set(document_ids)):
         raise NotFoundError("DOCUMENT_NOT_FOUND")
     return [found[document_id] for document_id in document_ids]
 
 
-async def _next_position(db: AsyncSession, ctx: TenantContext) -> int:
-    stmt = scoped(
-        select(func.max(PrintQueueItem.position)), ctx, PrintQueueItem
-    ).where(PrintQueueItem.user_id == ctx.user_id)
+async def _next_position(db: AsyncSession, ctx: TenantContext, user_id: UUID) -> int:
+    stmt = scoped(select(func.max(PrintQueueItem.position)), ctx, PrintQueueItem).where(
+        PrintQueueItem.user_id == user_id
+    )
     return ((await db.execute(stmt)).scalar() or 0) + 1
 
 
 async def _queue_item(
-    db: AsyncSession, ctx: TenantContext, item_id: UUID
+    db: AsyncSession, ctx: TenantContext, item_id: UUID, user_id: UUID
 ) -> PrintQueueItem:
     stmt = scoped_select(PrintQueueItem, ctx).where(
-        PrintQueueItem.id == item_id, PrintQueueItem.user_id == ctx.user_id
+        PrintQueueItem.id == item_id, PrintQueueItem.user_id == user_id
     )
     item = (await db.execute(stmt)).scalars().first()
     if item is None:
@@ -374,9 +425,7 @@ async def _job(db: AsyncSession, ctx: TenantContext, job_id: UUID) -> PrintJob:
     return job
 
 
-async def _increment_print_counts(
-    db: AsyncSession, ctx: TenantContext, job: PrintJob
-) -> None:
+async def _increment_print_counts(db: AsyncSession, ctx: TenantContext, job: PrintJob) -> None:
     stmt = (
         select(PrintJobItem)
         .where(PrintJobItem.print_job_id == job.id)
@@ -385,9 +434,7 @@ async def _increment_print_counts(
     items = (await db.execute(stmt)).scalars().all()
     documents = {
         document.id: document
-        for document in await _documents_of(
-            db, ctx, [item.document_id for item in items]
-        )
+        for document in await _documents_of(db, ctx, [item.document_id for item in items])
     }
     for item in items:
         documents[item.document_id].print_count += item.copies
@@ -415,7 +462,7 @@ def _label_cell(label: dict) -> str:
         f'<div class="qr">{qr}</div>'
         f'<p class="filename">{html.escape(str(label.get("filename", "")))}</p>'
         f'<p class="meta">{html.escape(str(label.get("short_id", "")))} '
-        f'&middot; {html.escape(str(label.get("uploaded_at", "")))}</p>'
+        f"&middot; {html.escape(str(label.get('uploaded_at', '')))}</p>"
         "</div>"
     )
 
@@ -434,7 +481,8 @@ def _stylesheet(template: LabelTemplate) -> str:
     .label {{ width: {template.label_width_mm}mm; height: {template.label_height_mm}mm;
               padding: 2mm; overflow: hidden; page-break-inside: avoid; }}
     .label.blank {{ visibility: hidden; }}
-    .qr svg {{ width: {template.qr_mm}mm; height: {template.qr_mm}mm; shape-rendering: crispEdges; }}
+    .qr svg {{ width: {template.qr_mm}mm; height: {template.qr_mm}mm;
+               shape-rendering: crispEdges; }}
     .filename {{ margin: 1mm 0 0; font-size: 9pt; font-weight: 600; line-height: 1.15;
                  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
                  overflow: hidden; }}

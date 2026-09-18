@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
-
-ItemT = TypeVar("ItemT")
 
 #: Hard ceiling on page size, so a client cannot ask for the whole archive at once.
 MAX_PAGE_SIZE = 200
@@ -43,7 +41,7 @@ class PageParams:
         return self.page_size
 
 
-class PageResponse(Schema, Generic[ItemT]):
+class PageResponse[ItemT](Schema):
     """The only shape a collection endpoint may return."""
 
     items: list[ItemT]
@@ -52,12 +50,8 @@ class PageResponse(Schema, Generic[ItemT]):
     page_size: int
 
     @classmethod
-    def of(
-        cls, items: list[ItemT], total: int, params: PageParams
-    ) -> "PageResponse[ItemT]":
-        return cls(
-            items=items, total=total, page=params.page, page_size=params.page_size
-        )
+    def of(cls, items: list[ItemT], total: int, params: PageParams) -> PageResponse[ItemT]:
+        return cls(items=items, total=total, page=params.page, page_size=params.page_size)
 
 
 class Acknowledgement(Schema):

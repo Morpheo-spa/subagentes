@@ -36,9 +36,7 @@ def _company_users(ctx: TenantContext) -> Select:
 
 
 async def _get_user(db: Db, ctx: TenantContext, user_id: uuid.UUID) -> User:
-    user = (
-        await db.execute(_company_users(ctx).where(User.id == user_id))
-    ).scalar_one_or_none()
+    user = (await db.execute(_company_users(ctx).where(User.id == user_id))).scalar_one_or_none()
     if user is None:
         raise NotFoundError("USER_NOT_FOUND")
     return user
@@ -76,9 +74,7 @@ async def _assert_sites_belong_to_company(
     wanted = {membership.site_id for membership in memberships}
     found = set(
         (
-            await db.execute(
-                select(Site.id).where(Site.mm_id == ctx.mm_id, Site.id.in_(wanted))
-            )
+            await db.execute(select(Site.id).where(Site.mm_id == ctx.mm_id, Site.id.in_(wanted)))
         ).scalars()
     )
     if wanted - found:
@@ -122,9 +118,7 @@ def _resolve_default_site(
     return sites[0]
 
 
-async def _audit(
-    db: Db, ctx: TenantContext, user: User, action: str, ip_hash: str | None
-) -> None:
+async def _audit(db: Db, ctx: TenantContext, user: User, action: str, ip_hash: str | None) -> None:
     await audit_service.record(
         db,
         mm_id=ctx.mm_id,
@@ -167,9 +161,7 @@ async def list_users(
 
     total = await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = (
-        await db.execute(
-            stmt.order_by(User.full_name).offset(page.offset).limit(page.limit)
-        )
+        await db.execute(stmt.order_by(User.full_name).offset(page.offset).limit(page.limit))
     ).scalars()
     items = [await _read(db, user) for user in rows]
     return PageResponse.of(items, total, page)
@@ -191,9 +183,7 @@ async def create_user(
         full_name=payload.full_name,
         hashed_password=hash_password(payload.password),
         locale=payload.locale,
-        default_site_id=_resolve_default_site(
-            payload.memberships, payload.default_site_id
-        ),
+        default_site_id=_resolve_default_site(payload.memberships, payload.default_site_id),
     )
     db.add(user)
     await db.flush()
@@ -220,9 +210,7 @@ async def update_user(
     if payload.version is not None and payload.version != user.version:
         raise ConflictError("VERSION_CONFLICT")
 
-    changes = payload.model_dump(
-        exclude_unset=True, exclude={"version", "password", "memberships"}
-    )
+    changes = payload.model_dump(exclude_unset=True, exclude={"version", "password", "memberships"})
     for field, value in changes.items():
         setattr(user, field, value)
     if payload.password:

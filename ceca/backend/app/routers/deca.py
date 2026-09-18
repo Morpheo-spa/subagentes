@@ -56,9 +56,7 @@ async def list_fields(ctx: ReadCtx, db: Db) -> DecaCatalogResponse:
     )
     definitions = list((await db.execute(stmt)).scalars())
     return DecaCatalogResponse(
-        catalog_version=max(
-            (definition.catalog_version for definition in definitions), default=1
-        ),
+        catalog_version=max((definition.catalog_version for definition in definitions), default=1),
         fields=[_field_read(definition) for definition in definitions],
     )
 
@@ -72,9 +70,7 @@ async def validate_deca(
     errors = validator.validate(payload.deca)
     return DecaValidationResult(
         is_complete=not errors,
-        deca_status=(
-            DecaStatus.COMPLETE.value if not errors else DecaStatus.INCOMPLETE.value
-        ),
+        deca_status=(DecaStatus.COMPLETE.value if not errors else DecaStatus.INCOMPLETE.value),
         catalog_version=validator.catalog_version,
         errors=[
             DecaFieldErrorRead(

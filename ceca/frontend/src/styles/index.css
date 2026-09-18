@@ -35,7 +35,8 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-overlay: var(--overlay);
-  --color-print-ink: var(--print-ink, #000);
+  --color-print-ink: var(--print-ink);
+  --color-print-paper: var(--print-paper);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
@@ -204,7 +205,7 @@
   }
 
   body {
-    background: var(--print-paper, #fff);
+    background: var(--print-paper);
   }
 
   .estampa-no-print {
@@ -233,7 +234,7 @@
   }
 
   .estampa-label {
-    color: var(--print-ink, #000) !important;
-    background: var(--print-paper, #fff) !important;
+    color: var(--print-ink) !important;
+    background: var(--print-paper) !important;
   }
 }

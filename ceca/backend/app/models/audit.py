@@ -7,7 +7,9 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import (
+    UUID as PgUUID,  # noqa: N811 (alias avoids shadowing uuid.UUID)
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, uuid_pk

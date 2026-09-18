@@ -110,13 +110,13 @@ export default function DecaEditPage() {
             </FormField>
           ) : null
         }
-        onSubmit={(values) => {
+        onSubmit={async (values) => {
           if (isRevision && !changeReason.trim()) {
             setReasonError(t('deca.validation.required'))
             return
           }
           setReasonError(null)
-          return save.mutateAsync(values).catch(() => undefined)
+          await save.mutateAsync(values).catch(() => undefined)
         }}
       />
     </div>

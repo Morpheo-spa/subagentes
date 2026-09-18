@@ -209,7 +209,9 @@ def _draw_header(
     )
 
     text_width = PAGE_WIDTH - 2 * MARGIN - QR_SIZE - 6 * mm
-    cursor = _wrapped(pdf, _say("title", language), MARGIN, top - 5 * mm, text_width, BOLD_FONT, 14, 17)
+    cursor = _wrapped(
+        pdf, _say("title", language), MARGIN, top - 5 * mm, text_width, BOLD_FONT, 14, 17
+    )
     cursor -= 3 * mm
 
     header_rows = (
@@ -228,9 +230,7 @@ def _draw_header(
     return cursor - 8 * mm
 
 
-def _draw_fields(
-    pdf: pdfcanvas.Canvas, values: dict, cursor: float, language: str
-) -> float:
+def _draw_fields(pdf: pdfcanvas.Canvas, values: dict, cursor: float, language: str) -> float:
     for label, value in _ordered_items(values, language):
         cursor = _row(pdf, label, value, cursor)
         cursor = _page_break(pdf, cursor, language)
@@ -265,9 +265,7 @@ def _draw_superseded(
 
 def _draw_footer(pdf: pdfcanvas.Canvas, language: str) -> None:
     pdf.setFont(BODY_FONT, 7)
-    lines = simpleSplit(
-        _say("legal_note", language), BODY_FONT, 7, PAGE_WIDTH - 2 * MARGIN
-    )
+    lines = simpleSplit(_say("legal_note", language), BODY_FONT, 7, PAGE_WIDTH - 2 * MARGIN)
     baseline = MARGIN
     for line in reversed(lines):
         pdf.drawString(MARGIN, baseline, line)
@@ -285,9 +283,7 @@ def _row(
     value_width = (width or PAGE_WIDTH - 2 * MARGIN) - LABEL_WIDTH
     pdf.setFont(BOLD_FONT, 9)
     pdf.drawString(MARGIN, cursor, label)
-    bottom = _wrapped(
-        pdf, value, MARGIN + LABEL_WIDTH, cursor, value_width, BODY_FONT, 9.5, 12
-    )
+    bottom = _wrapped(pdf, value, MARGIN + LABEL_WIDTH, cursor, value_width, BODY_FONT, 9.5, 12)
     return bottom - 3 * mm
 
 

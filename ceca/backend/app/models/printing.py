@@ -7,18 +7,20 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import (
+    UUID as PgUUID,  # noqa: N811 (alias avoids shadowing uuid.UUID)
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, OptimisticLock, TenantScoped, TimestampMixin, uuid_pk
 
 
-class PrintLayout(str, enum.Enum):
+class PrintLayout(enum.StrEnum):
     SINGLE = "single"  # one label per page, thermal printers
-    SHEET = "sheet"    # N x M grid on a sheet
+    SHEET = "sheet"  # N x M grid on a sheet
 
 
-class PrintJobStatus(str, enum.Enum):
+class PrintJobStatus(enum.StrEnum):
     PENDING = "pending"
     PRINTED = "printed"
     FAILED = "failed"
@@ -64,7 +66,7 @@ class PrintJob(Base, TenantScoped, TimestampMixin, OptimisticLock):
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failure_reason: Mapped[str | None] = mapped_column(String(255))
 
-    items: Mapped[list["PrintJobItem"]] = relationship(
+    items: Mapped[list[PrintJobItem]] = relationship(
         back_populates="job", cascade="all, delete-orphan"
     )
 

@@ -1,0 +1,381 @@
+{
+  "admin": {
+    "retention": {
+      "days": "Retention days",
+      "minimumWarning": "You are at the legal minimum of {days} days. Raising it is recommended as evidentiary precaution.",
+      "saved": "Retention policy saved"
+    },
+    "sites": {
+      "createdAt": "Created",
+      "name": "Name",
+      "prefix": "Prefix",
+      "users": "Users"
+    },
+    "storage": {
+      "config": "Configuration",
+      "default": "Default",
+      "health": "Health",
+      "healths": {
+        "degraded": "Degraded",
+        "down": "Down",
+        "ok": "Healthy",
+        "unknown": "Not checked"
+      },
+      "kind": "Kind",
+      "kinds": {
+        "ftp": "FTP",
+        "local": "Local disk",
+        "s3": "S3"
+      },
+      "lastChecked": "Last checked",
+      "name": "Name",
+      "secretsNotice": "Credentials are stored encrypted and are never shown, not even masked. To change them they must be entered again."
+    },
+    "subtitle": "Sites, users, storage and retention.",
+    "tabs": {
+      "retention": "Retention",
+      "sites": "Sites",
+      "storage": "Storage",
+      "users": "Users and roles"
+    },
+    "title": "Administration",
+    "users": {
+      "email": "Email",
+      "lastLogin": "Last sign-in",
+      "name": "Name",
+      "roles": "Roles",
+      "sites": "Sites"
+    }
+  },
+  "app": {
+    "name": "Estampa"
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "subtitle": "DeCA record keeping for delivery notes.",
+    "title": "Sign in to Estampa"
+  },
+  "billing": {
+    "cancelsOn": "Cancels on {date}",
+    "choosePlan": "Choose this plan",
+    "currentPlan": "Current plan",
+    "disabledBody": "This installation runs without the payments module. There are no plans to buy and nothing to pay.",
+    "disabledTitle": "Billing is not enabled",
+    "documentsUsed": "{used} of {included} documents",
+    "intervals": {
+      "month": "month",
+      "year": "year"
+    },
+    "noSubscription": "There is no active subscription.",
+    "period": "Period from {from} to {to}",
+    "plans": "Plans",
+    "renewsOn": "Renews on {date}",
+    "statuses": {
+      "active": "Active",
+      "canceled": "Cancelled",
+      "past_due": "Past due",
+      "trialing": "Trialing"
+    },
+    "storageUsed": "Storage used: {size}",
+    "subscription": "Subscription",
+    "subtitle": "Plan, subscription and usage for this site.",
+    "title": "Billing",
+    "usage": "Usage"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "copied": "Copied to clipboard",
+    "copyFailed": "Could not copy",
+    "copyGuid": "Copy GUID",
+    "guidCopied": "GUID copied",
+    "never": "Never",
+    "remove": "Remove",
+    "required": "required",
+    "retry": "Retry",
+    "save": "Save",
+    "saving": "Saving…"
+  },
+  "compliance": {
+    "incomplete": "Incomplete data",
+    "notADeca": "Not a valid DeCA",
+    "ok": "Valid DeCA"
+  },
+  "deca": {
+    "changeReason": "Reason for the change",
+    "changeReasonHelp": "Recorded alongside the previous revision, which is kept and marked as superseded.",
+    "editSubtitle": "Document: {name}",
+    "editTitle": "DeCA data",
+    "errorSummary": "Check these fields",
+    "generateAction": "Generate the PDF",
+    "generateSubtitle": "Create the control document from the shipment data.",
+    "generateTitle": "Generate DeCA",
+    "generated": "DeCA generated",
+    "generatedToast": "DeCA generated successfully",
+    "groupHints": {
+      "cargador": "Whoever contracts directly with the actual carrier.",
+      "envio": "Origin, destination and date of the transport.",
+      "mercancia": "Nature and weight of the goods carried.",
+      "otros": "Remarks and reservations from the parties.",
+      "transportista": "Holder of the authorisation under which the transport is carried out."
+    },
+    "groups": {
+      "cargador": "Contractual shipper",
+      "envio": "Shipment",
+      "mercancia": "Goods",
+      "otros": "Other data",
+      "transportista": "Actual carrier"
+    },
+    "legalRef": "(art. {ref})",
+    "nativeNotice": "The PDF is generated natively from this data, with the QR embedded. It is the only fully compliant route: a scan does not qualify.",
+    "openInDocuments": "Open in Documents",
+    "revisionSaved": "Revision created",
+    "saveRevision": "Create a revision",
+    "saveValues": "Save the data",
+    "sendToPrint": "Send to printing",
+    "validation": {
+      "date": "Enter a valid date.",
+      "max": "The maximum value is {max}.",
+      "maxLength": "At most {max} characters.",
+      "min": "The minimum value is {min}.",
+      "nif": "Invalid NIF/CIF: check the control digit.",
+      "number": "Enter a valid number.",
+      "option": "Choose one of the options.",
+      "pattern": "The format is not valid.",
+      "plate": "The plate format is not valid.",
+      "required": "This field is required."
+    }
+  },
+  "documents": {
+    "addToQueue": "Add to print queue",
+    "allStatuses": "All statuses",
+    "bulkActions": "Actions on the selection",
+    "clearSelection": "Clear selection",
+    "columns": {
+      "actions": "Actions",
+      "expiresAt": "Expires",
+      "guid": "GUID",
+      "name": "Original name",
+      "prints": "Prints",
+      "status": "Status",
+      "uploadedAt": "Uploaded"
+    },
+    "copyPublicUrl": "Copy public URL",
+    "editDeca": "Edit DeCA data",
+    "emptyBody": "Upload your first PDF and it will show up here with its QR.",
+    "emptyCta": "Upload a PDF",
+    "emptyTitle": "No documents yet",
+    "events": {
+      "print": "Print",
+      "revision": "Revision",
+      "revoke": "QR revoked",
+      "upload": "Upload",
+      "view": "QR access",
+      "withdraw": "Withdrawal"
+    },
+    "expiresBefore": "Expires before",
+    "expiresOn": "Expires on {date}",
+    "exportCsv": "Export CSV",
+    "exportStarted": "Export started",
+    "filters": "Filters",
+    "nSelected": "{count} selected documents",
+    "noEvents": "No events recorded.",
+    "noPublicUrl": "This document has no active public URL.",
+    "noReason": "no reason recorded",
+    "noRevisions": "No revisions.",
+    "openDetail": "View details",
+    "print": "Print",
+    "resetFilters": "Clear filters",
+    "retention": "Retention",
+    "retentionDays": "{days} days",
+    "revisionN": "Revision {n}",
+    "revokeBody": "The public link will stop working immediately. Document:",
+    "revokeTitle": "Revoke the QR",
+    "revokeToken": "Revoke the QR",
+    "revoked": "QR revoked",
+    "rowActions": "Actions for {name}",
+    "search": "Search by name or GUID",
+    "searchHint": "Search covers the original name and the GUID.",
+    "selectAll": "Select all documents",
+    "selectOne": "Select {name}",
+    "selectedCount": "{count} selected",
+    "sha256": "SHA-256",
+    "size": "Size",
+    "status": "Status",
+    "subtitle": "Find, reprint, review history or withdraw.",
+    "superseded": "superseded",
+    "tabs": {
+      "history": "History",
+      "metadata": "Metadata",
+      "revisions": "Revisions"
+    },
+    "title": "Documents",
+    "uploadedBy": "Uploaded by",
+    "uploadedFrom": "Uploaded from",
+    "withdraw": "Withdraw",
+    "withdrawBody": "The file is withdrawn from storage and the record is kept. Document:",
+    "withdrawBodyBulk": "Files for {count} documents will be withdrawn; their records are kept. Selection:",
+    "withdrawReason": "Reason for withdrawal",
+    "withdrawTitle": "Withdraw the document",
+    "withdrawn": "Document withdrawn",
+    "withdrawnOn": "Withdrawn on {date}. Reason: {reason}"
+  },
+  "errors": {
+    "code": "Code: {code}",
+    "forbiddenBody": "Your account cannot access this section.",
+    "forbiddenTitle": "No permission",
+    "notFoundBody": "The address you opened does not exist.",
+    "notFoundTitle": "Page not found",
+    "title": "Something went wrong",
+    "unexpected": "An unexpected error occurred."
+  },
+  "nav": {
+    "admin": "Administration",
+    "billing": "Billing",
+    "deca": "Generate DeCA",
+    "documents": "Documents",
+    "printing": "Print queue",
+    "upload": "Upload PDFs"
+  },
+  "pagination": {
+    "label": "Pagination",
+    "next": "Next page",
+    "perPage": "Per page",
+    "previous": "Previous page",
+    "summary": "Page {page} of {pages} · {total} results"
+  },
+  "printing": {
+    "addedToQueue": "Added to the queue ({count})",
+    "addedWithCopies": "Added to the queue ({count} copies)",
+    "confirmBody": "{labels} labels will be printed on {pages} pages using template",
+    "confirmTitle": "Print the queue",
+    "copies": "Copies",
+    "didItPrintBody": "If everything went well we clear the queue. If not, we keep it and mark the job as failed.",
+    "didItPrintTitle": "Did it print correctly?",
+    "emptyBody": "Add documents from the list or right after an upload.",
+    "emptyCta": "Go to Documents",
+    "emptyTitle": "The queue is empty",
+    "jobRegistered": "Print job recorded",
+    "markedFailed": "Job marked as failed",
+    "mode": "Mode",
+    "modeGrid": "Label sheet",
+    "modeSingle": "One label per page",
+    "moveDown": "Move {name} down the queue",
+    "moveUp": "Move {name} up the queue",
+    "preview": "Preview",
+    "print": "Print",
+    "printFailed": "No, it failed",
+    "printOk": "Yes, it printed",
+    "printer": "Printer",
+    "queueCleared": "Queue cleared",
+    "queueSection": "In queue",
+    "removeBody": "It will be removed from the print queue. Document:",
+    "removeItem": "Remove {name} from the queue",
+    "removeTitle": "Remove from the queue",
+    "removed": "Removed from the queue",
+    "settings": "Settings",
+    "startPosition": "Start at position",
+    "subtitle": "Collect labels and print them in one go.",
+    "summary": "{labels} labels · {pages} pages",
+    "systemPrinter": "System printer",
+    "template": "Template",
+    "title": "Print queue"
+  },
+  "public": {
+    "download": "Download the PDF",
+    "openOrDownload": "Open or download",
+    "pageOf": "Page {page} of {name}",
+    "unavailableBody": "This link is not available.",
+    "unavailableTitle": "Document unavailable",
+    "uploadedOn": "Uploaded on {date}",
+    "viewerFailed": "The PDF could not be displayed in the browser."
+  },
+  "qr": {
+    "alt": "QR code for document {name}",
+    "pending": "QR code pending for document {name}"
+  },
+  "shell": {
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "language": "Language",
+    "languages": {
+      "en": "English",
+      "es": "Español"
+    },
+    "logout": "Sign out",
+    "mainNav": "Main navigation",
+    "openMenu": "Open menu",
+    "site": "Site",
+    "siteChanged": "Site changed",
+    "skipToContent": "Skip to content",
+    "theme": "Theme",
+    "themes": {
+      "auto": "Follow system",
+      "dark": "Dark",
+      "light": "Light"
+    }
+  },
+  "status": {
+    "error": "Error",
+    "expiringSoon": "Expiring soon",
+    "printed": "Printed",
+    "processing": "Processing",
+    "queued": "In print queue",
+    "queuedUpload": "Queued",
+    "ready": "Ready",
+    "uploading": "Uploading",
+    "withdrawn": "Withdrawn"
+  },
+  "upload": {
+    "applyMetadata": "Apply to the batch",
+    "batchMetadata": "DeCA data for the batch",
+    "batchMetadataHelp": "Will be applied to the {count} documents already finished.",
+    "columns": {
+      "actions": "Actions",
+      "file": "File",
+      "guid": "GUID",
+      "qr": "QR",
+      "status": "Status"
+    },
+    "copyUrl": "Copy public URL",
+    "dropHint": "PDF only, up to {size} per file.",
+    "dropTitle": "Drop your PDFs here",
+    "duplicate": "Duplicate",
+    "duplicateWarning": "An identical file already exists, uploaded on {date}.",
+    "emptyBody": "Drop your PDFs or use the “Select files” button.",
+    "emptyTitle": "No files added yet",
+    "errorCodes": {
+      "DOCUMENT_PROCESSING_FAILED": "Processing the document failed.",
+      "DOCUMENT_PROCESSING_TIMEOUT": "Processing is taking too long.",
+      "NETWORK_ERROR": "No connection to the server.",
+      "UNKNOWN_ERROR": "Unknown error.",
+      "UPLOAD_EMPTY_RESPONSE": "The server returned no document.",
+      "UPLOAD_NOT_PDF": "Only PDF files are accepted.",
+      "UPLOAD_TOO_LARGE": "The file is larger than the allowed maximum."
+    },
+    "generateInstead": "Generate a DeCA from data",
+    "leave": "Leave anyway",
+    "leaveBody": "If you leave now, unfinished uploads will be cancelled.",
+    "leaveTitle": "Uploads in progress",
+    "metadataApplied": "Data applied to {count} documents",
+    "notADecaWarning": "This PDF looks like a scan or a photo: it is not a valid DeCA. The rules require a native PDF generated from structured data.",
+    "print": "Add to print queue",
+    "progressLabel": "Upload progress for {name}",
+    "readyCount": "{ready} of {total} ready",
+    "removeFromBatch": "Remove {name} from the batch",
+    "selectFiles": "Select files",
+    "sendToPrint": "Send to printing ({count})",
+    "stay": "Stay here",
+    "subtitle": "Archive one or more delivery notes and get their QR.",
+    "summary": "{total} files · {ready} ready · {errors} failed",
+    "title": "Upload PDFs",
+    "uploadAnyway": "Upload anyway",
+    "uploadingPercent": "Uploading {percent}%",
+    "urlCopied": "Public URL copied",
+    "useExisting": "Use the existing one",
+    "view": "View document"
+  }
+}

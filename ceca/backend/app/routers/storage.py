@@ -31,9 +31,7 @@ ReadCtx = Annotated[TenantContext, Depends(require_permission("storage:read"))]
 ManageCtx = Annotated[TenantContext, Depends(require_permission("storage:manage"))]
 
 
-async def _get_backend(
-    db: Db, ctx: TenantContext, backend_id: uuid.UUID
-) -> StorageBackend:
+async def _get_backend(db: Db, ctx: TenantContext, backend_id: uuid.UUID) -> StorageBackend:
     stmt = scoped_select(StorageBackend, ctx).where(StorageBackend.id == backend_id)
     backend = (await db.execute(stmt)).scalar_one_or_none()
     if backend is None:
@@ -41,9 +39,7 @@ async def _get_backend(
     return backend
 
 
-async def _demote_other_defaults(
-    db: Db, ctx: TenantContext, keep_id: uuid.UUID | None
-) -> None:
+async def _demote_other_defaults(db: Db, ctx: TenantContext, keep_id: uuid.UUID | None) -> None:
     stmt = (
         update(StorageBackend)
         .where(
@@ -79,9 +75,7 @@ async def _audit(
 
 
 @router.get("/", response_model=PageResponse[StorageBackendRead])
-async def list_backends(
-    ctx: ReadCtx, db: Db, page: Page
-) -> PageResponse[StorageBackendRead]:
+async def list_backends(ctx: ReadCtx, db: Db, page: Page) -> PageResponse[StorageBackendRead]:
     stmt = scoped_select(StorageBackend, ctx)
     total = await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = (
@@ -91,14 +85,10 @@ async def list_backends(
             .limit(page.limit)
         )
     ).scalars()
-    return PageResponse.of(
-        [StorageBackendRead.model_validate(row) for row in rows], total, page
-    )
+    return PageResponse.of([StorageBackendRead.model_validate(row) for row in rows], total, page)
 
 
-@router.post(
-    "/", response_model=StorageBackendRead, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=StorageBackendRead, status_code=status.HTTP_201_CREATED)
 async def create_backend(
     payload: StorageBackendCreate, ctx: ManageCtx, db: Db, ip_hash: ClientIpHash
 ) -> StorageBackendRead:
@@ -108,9 +98,7 @@ async def create_backend(
         name=payload.name,
         kind=payload.kind,
         config=payload.config,
-        config_encrypted=(
-            encrypt_secret(json.dumps(payload.secrets)) if payload.secrets else None
-        ),
+        config_encrypted=(encrypt_secret(json.dumps(payload.secrets)) if payload.secrets else None),
         is_default=payload.is_default,
         is_active=payload.is_active,
     )
@@ -123,9 +111,7 @@ async def create_backend(
 
 
 @router.get("/{backend_id}", response_model=StorageBackendRead)
-async def get_backend(
-    backend_id: uuid.UUID, ctx: ReadCtx, db: Db
-) -> StorageBackendRead:
+async def get_backend(backend_id: uuid.UUID, ctx: ReadCtx, db: Db) -> StorageBackendRead:
     return StorageBackendRead.model_validate(await _get_backend(db, ctx, backend_id))
 
 
@@ -169,9 +155,7 @@ async def deactivate_backend(
 
 
 @router.post("/{backend_id}/test", response_model=StorageTestResult)
-async def test_backend(
-    backend_id: uuid.UUID, ctx: ManageCtx, db: Db
-) -> StorageTestResult:
+async def test_backend(backend_id: uuid.UUID, ctx: ManageCtx, db: Db) -> StorageTestResult:
     backend = await _get_backend(db, ctx, backend_id)
     ok = await storage_service.health_check(db, backend)
     backend.last_health_ok = ok

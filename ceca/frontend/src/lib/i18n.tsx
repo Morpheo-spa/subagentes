@@ -74,7 +74,7 @@ export interface I18nValue {
   setLocale: (locale: Locale) => void
   t: (key: string, params?: TParams) => string
   /** Elige `label_es` / `label_en` de un catalogo de la API. */
-  pick: <T extends Record<string, unknown>>(source: T, base: string) => string
+  pick: (source: object, base: string) => string
 }
 
 const I18nContext = createContext<I18nValue | null>(null)
@@ -103,9 +103,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       setLocale,
       t: (key, params) => translate(locale, key, params),
       pick: (source, base) => {
-        const localized = source[`${base}_${locale}`]
+        const record = source as Record<string, unknown>
+        const localized = record[`${base}_${locale}`]
         if (typeof localized === 'string') return localized
-        const fallback = source[`${base}_${DEFAULT_LOCALE}`]
+        const fallback = record[`${base}_${DEFAULT_LOCALE}`]
         return typeof fallback === 'string' ? fallback : ''
       },
     }),

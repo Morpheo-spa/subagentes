@@ -34,7 +34,8 @@ class SwitchSiteRequest(Schema):
 class TokenPair(Schema):
     access_token: str
     refresh_token: str
-    token_type: Literal["bearer"] = "bearer"
+    #: The OAuth 2.0 scheme name the client must put in the Authorization header.
+    token_type: Literal["bearer"] = "bearer"  # noqa: S105
     expires_in: int
 
 

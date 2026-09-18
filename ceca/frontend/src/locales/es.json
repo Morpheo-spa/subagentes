@@ -1,0 +1,381 @@
+{
+  "admin": {
+    "retention": {
+      "days": "Días de retención",
+      "minimumWarning": "Estás en el mínimo legal de {days} días. Se recomienda ampliarlo por prudencia probatoria.",
+      "saved": "Política de retención guardada"
+    },
+    "sites": {
+      "createdAt": "Creado",
+      "name": "Nombre",
+      "prefix": "Prefijo",
+      "users": "Usuarios"
+    },
+    "storage": {
+      "config": "Configuración",
+      "default": "Por defecto",
+      "health": "Estado",
+      "healths": {
+        "degraded": "Degradado",
+        "down": "Caído",
+        "ok": "Correcto",
+        "unknown": "Sin comprobar"
+      },
+      "kind": "Tipo",
+      "kinds": {
+        "ftp": "FTP",
+        "local": "Disco local",
+        "s3": "S3"
+      },
+      "lastChecked": "Última comprobación",
+      "name": "Nombre",
+      "secretsNotice": "Las credenciales se guardan cifradas y no se muestran nunca, ni siquiera enmascaradas. Para cambiarlas hay que volver a introducirlas."
+    },
+    "subtitle": "Centros, usuarios, almacenamiento y retención.",
+    "tabs": {
+      "retention": "Retención",
+      "sites": "Centros",
+      "storage": "Almacenamiento",
+      "users": "Usuarios y roles"
+    },
+    "title": "Administración",
+    "users": {
+      "email": "Correo",
+      "lastLogin": "Último acceso",
+      "name": "Nombre",
+      "roles": "Roles",
+      "sites": "Centros"
+    }
+  },
+  "app": {
+    "name": "Estampa"
+  },
+  "auth": {
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "signIn": "Entrar",
+    "signingIn": "Entrando…",
+    "subtitle": "Registro DeCA de albaranes.",
+    "title": "Entrar en Estampa"
+  },
+  "billing": {
+    "cancelsOn": "Se cancela el {date}",
+    "choosePlan": "Elegir este plan",
+    "currentPlan": "Plan actual",
+    "disabledBody": "Esta instalación funciona sin módulo de pagos. No hay planes que contratar ni importes que abonar.",
+    "disabledTitle": "Facturación no activada",
+    "documentsUsed": "{used} de {included} documentos",
+    "intervals": {
+      "month": "mes",
+      "year": "año"
+    },
+    "noSubscription": "No hay ninguna suscripción activa.",
+    "period": "Periodo del {from} al {to}",
+    "plans": "Planes",
+    "renewsOn": "Se renueva el {date}",
+    "statuses": {
+      "active": "Activa",
+      "canceled": "Cancelada",
+      "past_due": "Pago pendiente",
+      "trialing": "En prueba"
+    },
+    "storageUsed": "Almacenamiento usado: {size}",
+    "subscription": "Suscripción",
+    "subtitle": "Plan, suscripción y consumo del centro.",
+    "title": "Facturación",
+    "usage": "Consumo"
+  },
+  "common": {
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "copied": "Copiado al portapapeles",
+    "copyFailed": "No se ha podido copiar",
+    "copyGuid": "Copiar GUID",
+    "guidCopied": "GUID copiado",
+    "never": "Nunca",
+    "remove": "Quitar",
+    "required": "obligatorio",
+    "retry": "Reintentar",
+    "save": "Guardar",
+    "saving": "Guardando…"
+  },
+  "compliance": {
+    "incomplete": "Datos incompletos",
+    "notADeca": "No es un DeCA válido",
+    "ok": "DeCA válido"
+  },
+  "deca": {
+    "changeReason": "Motivo de la modificación",
+    "changeReasonHelp": "Queda registrado junto a la revisión anterior, que se conserva marcada como sustituida.",
+    "editSubtitle": "Documento: {name}",
+    "editTitle": "Datos del DeCA",
+    "errorSummary": "Revisa estos campos",
+    "generateAction": "Generar el PDF",
+    "generateSubtitle": "Crea el documento de control desde los datos del envío.",
+    "generateTitle": "Generar DeCA",
+    "generated": "DeCA generado",
+    "generatedToast": "DeCA generado correctamente",
+    "groupHints": {
+      "cargador": "Quien contrata directamente con el transportista efectivo.",
+      "envio": "Origen, destino y fecha del transporte.",
+      "mercancia": "Naturaleza y peso de la mercancía transportada.",
+      "otros": "Observaciones y reservas de las partes.",
+      "transportista": "Titular de la autorización al amparo de la cual se realiza el transporte."
+    },
+    "groups": {
+      "cargador": "Cargador contractual",
+      "envio": "Envío",
+      "mercancia": "Mercancía",
+      "otros": "Otros datos",
+      "transportista": "Transportista efectivo"
+    },
+    "legalRef": "(art. {ref})",
+    "nativeNotice": "El PDF se genera de forma nativa desde estos datos, con el QR embebido. Es la única vía plenamente conforme: un escaneo no sirve.",
+    "openInDocuments": "Abrir en Documentos",
+    "revisionSaved": "Revisión creada",
+    "saveRevision": "Crear una revisión",
+    "saveValues": "Guardar los datos",
+    "sendToPrint": "Enviar a impresión",
+    "validation": {
+      "date": "Introduce una fecha válida.",
+      "max": "El valor máximo es {max}.",
+      "maxLength": "Como mucho {max} caracteres.",
+      "min": "El valor mínimo es {min}.",
+      "nif": "El NIF/CIF no es válido: revisa el dígito de control.",
+      "number": "Introduce un número válido.",
+      "option": "Elige una de las opciones.",
+      "pattern": "El formato no es válido.",
+      "plate": "La matrícula no tiene un formato válido.",
+      "required": "Este campo es obligatorio."
+    }
+  },
+  "documents": {
+    "addToQueue": "Añadir a la cola de impresión",
+    "allStatuses": "Todos los estados",
+    "bulkActions": "Acciones sobre la selección",
+    "clearSelection": "Quitar la selección",
+    "columns": {
+      "actions": "Acciones",
+      "expiresAt": "Caduca",
+      "guid": "GUID",
+      "name": "Nombre original",
+      "prints": "Impresiones",
+      "status": "Estado",
+      "uploadedAt": "Subido"
+    },
+    "copyPublicUrl": "Copiar la URL pública",
+    "editDeca": "Editar los datos DeCA",
+    "emptyBody": "Sube tu primer PDF y aparecerá aquí con su QR.",
+    "emptyCta": "Subir un PDF",
+    "emptyTitle": "Aún no hay documentos",
+    "events": {
+      "print": "Impresión",
+      "revision": "Revisión",
+      "revoke": "QR revocado",
+      "upload": "Subida",
+      "view": "Acceso por QR",
+      "withdraw": "Retirada"
+    },
+    "expiresBefore": "Caduca antes de",
+    "expiresOn": "Caduca el {date}",
+    "exportCsv": "Exportar CSV",
+    "exportStarted": "Exportación iniciada",
+    "filters": "Filtros",
+    "nSelected": "{count} documentos seleccionados",
+    "noEvents": "No hay eventos registrados.",
+    "noPublicUrl": "Este documento no tiene URL pública activa.",
+    "noReason": "sin motivo registrado",
+    "noRevisions": "No hay revisiones.",
+    "openDetail": "Ver el detalle",
+    "print": "Imprimir",
+    "resetFilters": "Limpiar filtros",
+    "retention": "Retención",
+    "retentionDays": "{days} días",
+    "revisionN": "Revisión {n}",
+    "revokeBody": "El enlace público dejará de funcionar de inmediato. Documento:",
+    "revokeTitle": "Revocar el QR",
+    "revokeToken": "Revocar el QR",
+    "revoked": "QR revocado",
+    "rowActions": "Acciones de {name}",
+    "search": "Buscar por nombre o GUID",
+    "searchHint": "La búsqueda incluye el nombre original y el GUID.",
+    "selectAll": "Seleccionar todos los documentos",
+    "selectOne": "Seleccionar {name}",
+    "selectedCount": "{count} seleccionados",
+    "sha256": "SHA-256",
+    "size": "Tamaño",
+    "status": "Estado",
+    "subtitle": "Busca, reimprime, revisa el historial o retira.",
+    "superseded": "sustituida",
+    "tabs": {
+      "history": "Historial",
+      "metadata": "Metadatos",
+      "revisions": "Revisiones"
+    },
+    "title": "Documentos",
+    "uploadedBy": "Subido por",
+    "uploadedFrom": "Subido desde",
+    "withdraw": "Retirar",
+    "withdrawBody": "El fichero se retira del almacenamiento y el registro se conserva. Documento:",
+    "withdrawBodyBulk": "Se retirarán los ficheros de {count} documentos; sus registros se conservan. Selección:",
+    "withdrawReason": "Motivo de la retirada",
+    "withdrawTitle": "Retirar el documento",
+    "withdrawn": "Documento retirado",
+    "withdrawnOn": "Retirado el {date}. Motivo: {reason}"
+  },
+  "errors": {
+    "code": "Código: {code}",
+    "forbiddenBody": "Tu usuario no tiene permiso para ver esta sección.",
+    "forbiddenTitle": "Sin permiso",
+    "notFoundBody": "La dirección que has abierto no existe.",
+    "notFoundTitle": "Página no encontrada",
+    "title": "Algo ha fallado",
+    "unexpected": "Ha ocurrido un error inesperado."
+  },
+  "nav": {
+    "admin": "Administración",
+    "billing": "Facturación",
+    "deca": "Generar DeCA",
+    "documents": "Documentos",
+    "printing": "Cola de impresión",
+    "upload": "Subir PDFs"
+  },
+  "pagination": {
+    "label": "Paginación",
+    "next": "Página siguiente",
+    "perPage": "Por página",
+    "previous": "Página anterior",
+    "summary": "Página {page} de {pages} · {total} resultados"
+  },
+  "printing": {
+    "addedToQueue": "Añadido a la cola ({count})",
+    "addedWithCopies": "Añadido a la cola ({count} copias)",
+    "confirmBody": "Se imprimirán {labels} etiquetas en {pages} páginas con la plantilla",
+    "confirmTitle": "Imprimir la cola",
+    "copies": "Copias",
+    "didItPrintBody": "Si todo ha salido bien vaciamos la cola. Si no, la mantenemos y marcamos el trabajo como fallido.",
+    "didItPrintTitle": "¿Se imprimió bien?",
+    "emptyBody": "Añade documentos desde el listado o desde una subida.",
+    "emptyCta": "Ir a Documentos",
+    "emptyTitle": "La cola está vacía",
+    "jobRegistered": "Trabajo de impresión registrado",
+    "markedFailed": "Trabajo marcado como fallido",
+    "mode": "Modo",
+    "modeGrid": "Hoja cuadriculada",
+    "modeSingle": "Una etiqueta por página",
+    "moveDown": "Bajar {name} en la cola",
+    "moveUp": "Subir {name} en la cola",
+    "preview": "Vista previa",
+    "print": "Imprimir",
+    "printFailed": "No, ha fallado",
+    "printOk": "Sí, se imprimió",
+    "printer": "Impresora",
+    "queueCleared": "Cola vaciada",
+    "queueSection": "En cola",
+    "removeBody": "Se quitará de la cola de impresión. Documento:",
+    "removeItem": "Quitar {name} de la cola",
+    "removeTitle": "Quitar de la cola",
+    "removed": "Quitado de la cola",
+    "settings": "Configuración",
+    "startPosition": "Empezar en la posición",
+    "subtitle": "Acumula etiquetas y lánzalas de una vez.",
+    "summary": "{labels} etiquetas · {pages} páginas",
+    "systemPrinter": "Impresora del sistema",
+    "template": "Plantilla",
+    "title": "Cola de impresión"
+  },
+  "public": {
+    "download": "Descargar el PDF",
+    "openOrDownload": "Abrir o descargar",
+    "pageOf": "Página {page} de {name}",
+    "unavailableBody": "Este enlace no está disponible.",
+    "unavailableTitle": "Documento no disponible",
+    "uploadedOn": "Subido el {date}",
+    "viewerFailed": "No se ha podido mostrar el PDF en el navegador."
+  },
+  "qr": {
+    "alt": "Código QR del documento {name}",
+    "pending": "Código QR pendiente del documento {name}"
+  },
+  "shell": {
+    "collapseSidebar": "Contraer el menú lateral",
+    "expandSidebar": "Expandir el menú lateral",
+    "language": "Idioma",
+    "languages": {
+      "en": "English",
+      "es": "Español"
+    },
+    "logout": "Cerrar sesión",
+    "mainNav": "Navegación principal",
+    "openMenu": "Abrir el menú",
+    "site": "Centro de trabajo",
+    "siteChanged": "Centro de trabajo cambiado",
+    "skipToContent": "Saltar al contenido",
+    "theme": "Tema",
+    "themes": {
+      "auto": "Según el sistema",
+      "dark": "Oscuro",
+      "light": "Claro"
+    }
+  },
+  "status": {
+    "error": "Error",
+    "expiringSoon": "Caduca pronto",
+    "printed": "Impreso",
+    "processing": "Procesando",
+    "queued": "En cola de impresión",
+    "queuedUpload": "En cola",
+    "ready": "Listo",
+    "uploading": "Subiendo",
+    "withdrawn": "Retirado"
+  },
+  "upload": {
+    "applyMetadata": "Aplicar a la tanda",
+    "batchMetadata": "Datos DeCA de la tanda",
+    "batchMetadataHelp": "Se aplicarán a los {count} documentos ya listos.",
+    "columns": {
+      "actions": "Acciones",
+      "file": "Archivo",
+      "guid": "GUID",
+      "qr": "QR",
+      "status": "Estado"
+    },
+    "copyUrl": "Copiar la URL pública",
+    "dropHint": "Solo PDF, hasta {size} por archivo.",
+    "dropTitle": "Arrastra aquí tus PDFs",
+    "duplicate": "Duplicado",
+    "duplicateWarning": "Ya existe un archivo idéntico, subido el {date}.",
+    "emptyBody": "Arrastra tus PDFs o usa el botón «Seleccionar archivos».",
+    "emptyTitle": "Todavía no has añadido ningún archivo",
+    "errorCodes": {
+      "DOCUMENT_PROCESSING_FAILED": "El procesado del documento ha fallado.",
+      "DOCUMENT_PROCESSING_TIMEOUT": "El procesado está tardando demasiado.",
+      "NETWORK_ERROR": "No hay conexión con el servidor.",
+      "UNKNOWN_ERROR": "Error desconocido.",
+      "UPLOAD_EMPTY_RESPONSE": "El servidor no ha devuelto el documento.",
+      "UPLOAD_NOT_PDF": "Solo se admiten archivos PDF.",
+      "UPLOAD_TOO_LARGE": "El archivo supera el tamaño máximo permitido."
+    },
+    "generateInstead": "Generar un DeCA desde datos",
+    "leave": "Salir de todas formas",
+    "leaveBody": "Si sales ahora, las subidas que no hayan terminado se cancelarán.",
+    "leaveTitle": "Hay subidas en curso",
+    "metadataApplied": "Datos aplicados a {count} documentos",
+    "notADecaWarning": "Este PDF parece un escaneo o una foto: no es un DeCA válido. La norma exige un PDF nativo generado desde datos.",
+    "print": "Añadir a la cola de impresión",
+    "progressLabel": "Progreso de subida de {name}",
+    "readyCount": "{ready} de {total} listos",
+    "removeFromBatch": "Quitar {name} de la tanda",
+    "selectFiles": "Seleccionar archivos",
+    "sendToPrint": "Enviar a impresión ({count})",
+    "stay": "Seguir aquí",
+    "subtitle": "Archiva uno o varios albaranes y obtén su QR.",
+    "summary": "{total} archivos · {ready} listos · {errors} con error",
+    "title": "Subir PDFs",
+    "uploadAnyway": "Subir igualmente",
+    "uploadingPercent": "Subiendo {percent} %",
+    "urlCopied": "URL pública copiada",
+    "useExisting": "Usar el existente",
+    "view": "Ver el documento"
+  }
+}

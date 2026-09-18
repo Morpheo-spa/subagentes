@@ -71,7 +71,9 @@ export default function DecaGeneratePage() {
           submitLabel={t('deca.generateAction')}
           submitting={generate.isPending}
           serverErrors={serverErrors}
-          onSubmit={(values) => generate.mutateAsync(values).catch(() => undefined)}
+          onSubmit={async (values) => {
+            await generate.mutateAsync(values).catch(() => undefined)
+          }}
         />
       )}
 

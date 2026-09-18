@@ -6,7 +6,9 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, MetaData, func
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+from sqlalchemy.dialects.postgresql import (
+    UUID as PgUUID,  # noqa: N811 (alias avoids shadowing uuid.UUID)
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column
 
 NAMING_CONVENTION = {
@@ -63,9 +65,7 @@ class TenantScoped:
     @declared_attr.directive
     @classmethod
     def __table_args__(cls) -> tuple:  # noqa: D105
-        return (
-            Index(f"ix_{cls.__tablename__}_tenant", "mm_id", "site_id", "created_at"),
-        )
+        return (Index(f"ix_{cls.__tablename__}_tenant", "mm_id", "site_id", "created_at"),)
 
 
 class OptimisticLock:

@@ -7,7 +7,7 @@ import hmac
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 import jwt
 from argon2 import PasswordHasher
@@ -19,6 +19,10 @@ from app.errors import DomainError
 
 _hasher = PasswordHasher()
 TokenType = Literal["access", "refresh"]
+
+#: Named so the token kind never reads as a credential, to humans or to scanners.
+ACCESS: Final[TokenType] = "access"
+REFRESH: Final[TokenType] = "refresh"
 
 
 def hash_password(raw: str) -> str:
@@ -45,13 +49,13 @@ def create_token(
     permissions: set[str],
     is_superuser: bool,
     locale: str,
-    token_type: TokenType = "access",
+    token_type: TokenType = ACCESS,
 ) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
     lifetime = (
         timedelta(minutes=settings.access_token_minutes)
-        if token_type == "access"
+        if token_type == ACCESS
         else timedelta(days=settings.refresh_token_days)
     )
     payload: dict[str, Any] = {
@@ -70,12 +74,12 @@ def create_token(
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
-def decode_token(token: str, *, expected_type: TokenType = "access") -> dict[str, Any]:
+def decode_token(  # noqa: S107 (a token kind, not a secret)
+    token: str, *, expected_type: TokenType = ACCESS
+) -> dict[str, Any]:
     settings = get_settings()
     try:
-        payload = jwt.decode(
-            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
-        )
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
     except jwt.ExpiredSignatureError as exc:
         raise DomainError("TOKEN_EXPIRED", status_code=401) from exc
     except jwt.InvalidTokenError as exc:

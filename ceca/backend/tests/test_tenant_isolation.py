@@ -86,11 +86,19 @@ def _scoped_select_nodes(tree: ast.AST) -> set[int]:
     return wrapped
 
 
-def _exemption_reason(lines: list[str], lineno: int) -> str | None:
-    line = lines[lineno - 1]
-    if EXEMPTION_PRAGMA not in line:
-        return None
-    return line.split(EXEMPTION_PRAGMA, 1)[1].strip()
+def _exemption_reason(lines: list[str], node: ast.Call) -> str | None:
+    """Find the pragma anywhere in the call, or on the line just above it.
+
+    A formatter is free to wrap a call across several lines and carry a trailing
+    comment to the closing paren, so anchoring to the first line alone would make
+    an exemption silently evaporate the next time anyone runs the formatter.
+    """
+    first = max(node.lineno - 1, 1)
+    last = node.end_lineno or node.lineno
+    for line in lines[first - 1 : last]:
+        if EXEMPTION_PRAGMA in line:
+            return line.split(EXEMPTION_PRAGMA, 1)[1].strip()
+    return None
 
 
 def _offences_in(path: Path) -> list[Offence]:
@@ -109,7 +117,7 @@ def _offences_in(path: Path) -> list[Offence]:
         if model not in SCOPED_MODELS:
             continue
         location = f"{relative}:{node.lineno}"
-        reason = _exemption_reason(lines, node.lineno)
+        reason = _exemption_reason(lines, node)
         if reason is not None:
             if not reason:
                 offences.append(Offence(location, "tenant-exempt pragma without a reason"))
@@ -142,7 +150,9 @@ def test_scoped_helper_rejects_a_global_model() -> None:
     from app.deps import TenantContext, scoped
     from app.models import Plan
 
-    ctx = TenantContext(user_id=uuid.uuid4(), mm_id=uuid.uuid4(), site_id=uuid.uuid4(), site_prefix="X")
+    ctx = TenantContext(
+        user_id=uuid.uuid4(), mm_id=uuid.uuid4(), site_id=uuid.uuid4(), site_prefix="X"
+    )
     with pytest.raises(TypeError):
         scoped(select(Plan), ctx, Plan)
 

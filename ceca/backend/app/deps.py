@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Any
 
 from fastapi import Depends, Header, Request
 from sqlalchemy import Select, select
@@ -20,8 +20,6 @@ from app.security import decode_token
 
 SUPPORTED_LANGUAGES = ("es", "en")
 DEFAULT_LANGUAGE = "es"
-
-ModelT = TypeVar("ModelT")
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,20 +116,18 @@ def require_permission(permission: str):
     return guard
 
 
-def scoped(stmt: Select, ctx: TenantContext, model: type[ModelT]) -> Select:
+def scoped[ModelT](stmt: Select, ctx: TenantContext, model: type[ModelT]) -> Select:
     """Apply the two tenant filters. The only sanctioned way to read tenant data.
 
     Raises at call time if the model is not tenant scoped, so a missing filter is
     a loud failure rather than a silent cross-tenant read.
     """
     if not issubclass(model, TenantScoped):
-        raise TypeError(
-            f"{model.__name__} is not TenantScoped; scoped() would be a no-op filter"
-        )
+        raise TypeError(f"{model.__name__} is not TenantScoped; scoped() would be a no-op filter")
     return stmt.where(model.mm_id == ctx.mm_id, model.site_id == ctx.site_id)
 
 
-def scoped_select(model: type[ModelT], ctx: TenantContext) -> Select:
+def scoped_select[ModelT](model: type[ModelT], ctx: TenantContext) -> Select:
     return scoped(select(model), ctx, model)
 
 

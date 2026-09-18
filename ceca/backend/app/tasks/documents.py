@@ -31,9 +31,5 @@ def embed_document_qr(document_id: str, mm_id: str, site_id: str) -> None:
 def withdraw_document(document_id: str, mm_id: str, site_id: str, reason: str) -> None:
     """Withdraw a file out of band. Idempotent: an already withdrawn row is left alone."""
     ctx = tenant_context(mm_id, site_id)
-    run(
-        lambda db: documents.withdraw(
-            db, ctx, document_id=UUID(document_id), reason=reason
-        )
-    )
+    run(lambda db: documents.withdraw(db, ctx, UUID(document_id), reason=reason))
     logger.info("withdrew document %s", document_id)

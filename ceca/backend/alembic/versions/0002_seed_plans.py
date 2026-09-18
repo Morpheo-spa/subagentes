@@ -9,12 +9,14 @@ Create Date: 2026-09-18
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from typing import Any
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0002"
 down_revision: str | None = "0001"
@@ -78,8 +80,14 @@ plans_table = sa.table(
 )
 
 
+def _as_jsonb(value: dict[str, int]) -> sa.Cast:
+    """Render JSON as a cast string literal, so `alembic upgrade --sql` also works."""
+    return sa.cast(sa.literal(json.dumps(value), sa.String), postgresql.JSONB())
+
+
 def upgrade() -> None:
-    statement = postgresql.insert(plans_table).values(list(PLANS))
+    rows = [plan | {"limits": _as_jsonb(plan["limits"])} for plan in PLANS]
+    statement = postgresql.insert(plans_table).values(rows)
     op.execute(statement.on_conflict_do_nothing(index_elements=["code"]))
 
 

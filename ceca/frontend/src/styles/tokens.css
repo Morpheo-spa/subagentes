@@ -38,9 +38,12 @@
   --estampa-secondary-surface: #dbeafe;
   --estampa-primary-surface: #e2e8f0;
 
-  /* Impresion: siempre negro puro sobre blanco (label-template.md) */
+  /* Impresion: siempre negro puro sobre blanco (label-template.md).
+     No cambia en dark: el papel sigue siendo papel. */
   --estampa-print-ink: #000000;
   --estampa-print-paper: #ffffff;
+  --print-ink: var(--estampa-print-ink);
+  --print-paper: var(--estampa-print-paper);
 
   /* ---- Mapeo semantico esperado por shadcn/ui ------------------------- */
   --background: var(--estampa-background);

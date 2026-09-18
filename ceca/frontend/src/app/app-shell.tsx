@@ -148,7 +148,7 @@ function SiteSwitcher() {
 }
 
 function UserMenu() {
-  const { user, logout, updateLocale } = useAuth()
+  const { user, logout } = useAuth()
   const { t } = useI18n()
   const navigate = useNavigate()
 

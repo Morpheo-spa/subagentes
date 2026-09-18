@@ -11,7 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, OptimisticLock, TenantScoped, TimestampMixin, uuid_pk
 
 
-class RetentionAction(str, enum.Enum):
+class RetentionAction(enum.StrEnum):
     #: Remove the file from storage, keep the row with withdrawn_at + reason.
     WITHDRAW_FILE = "withdraw_file"
     #: Keep everything, only revoke the public QR token.

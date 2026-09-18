@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, OptimisticLock, TenantScoped, TimestampMixin, uuid_pk
 
 
-class StorageKind(str, enum.Enum):
+class StorageKind(enum.StrEnum):
     LOCAL = "local"
     S3 = "s3"
     FTP = "ftp"
