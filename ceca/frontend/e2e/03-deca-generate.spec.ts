@@ -28,7 +28,7 @@ test('formulario dinamico, NIF invalido junto al campo, genera un DeCA con QR', 
   for (const field of fields) {
     const control = page.locator(`[data-field="${field.code}"]`)
     await expect(control, `control de ${field.code}`).toBeVisible()
-    await expect(page.getByText(field.label_es, { exact: true }).first(), `label de ${field.code}`).toBeVisible()
+    await expect(page.locator('label', { hasText: field.label_es }).first(), `label de ${field.code}`).toBeVisible()
   }
 
   // Dos bloques SEPARADOS y etiquetados (docs/DECA.md §3, deca-form.md).
@@ -105,7 +105,9 @@ test('formulario dinamico, NIF invalido junto al campo, genera un DeCA con QR', 
   expect(document.origin).toBe('generated')
 
   // Valido como DeCA, con el QR de verdad (imagen, no el hueco pendiente).
-  const result = page.locator('section, div').filter({ has: page.getByRole('heading', { name: 'DeCA generado' }) }).last()
+  // En esta pagina el unico badge, QR y URL publica son los del resultado.
+  const result = page.getByRole('region', { name: 'DeCA generado' })
+  await expect(result).toBeVisible()
   await expect(result.getByText('Válido como DeCA')).toBeVisible()
   const qr = result.getByRole('img', { name: /^Código QR del documento/ })
   await expect(qr).toBeVisible()
@@ -114,5 +116,13 @@ test('formulario dinamico, NIF invalido junto al campo, genera un DeCA con QR', 
   await expect(result.getByText(/\/v\/[\w-]+/)).toBeVisible()
   await expect(result.getByRole('button', { name: 'Enviar a impresión' })).toBeVisible()
   await expect(result.getByRole('link', { name: 'Abrir en Documentos' })).toBeVisible()
+  // El resultado queda a la vista: no se esconde debajo de un formulario largo.
+  await expect
+    .poll(async () => {
+      const box = await result.boundingBox()
+      const viewport = page.viewportSize()!
+      return Boolean(box && box.y >= 0 && box.y < viewport.height)
+    }, { message: 'el resultado entra en el viewport tras generar' })
+    .toBe(true)
   await shots(page, '03-deca-generado')
 })

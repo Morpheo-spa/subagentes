@@ -63,6 +63,16 @@ export async function shots(page: Page, name: string, options: { fullPage?: bool
   await page.waitForTimeout(150)
 }
 
+/** Espera a que terminen las animaciones en curso (sheet, filas, toasts). */
+export async function settle(page: Page) {
+  await page
+    .evaluate(() =>
+      Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))),
+    )
+    .catch(() => undefined)
+  await page.waitForTimeout(100)
+}
+
 /** Una sola captura al ancho actual (para estados intermedios). */
 export async function shot(page: Page, name: string) {
   mkdirSync(SCREENSHOT_DIR, { recursive: true })

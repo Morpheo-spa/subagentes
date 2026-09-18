@@ -10,10 +10,21 @@ import {
 import { FileMagnifyingGlass } from '@phosphor-icons/react'
 import { EmptyState } from '@/components/common/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useSessionPermissions } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
-import { PERMISSIONS } from '@/lib/permissions'
-import { AppShell } from './app-shell'
+import { hasPermission, PERMISSIONS } from '@/lib/permissions'
+import { AppShell, NAV } from './app-shell'
 import { ProtectedRoute } from './protected-route'
+
+/**
+ * Home = la primera entrada del menu que el usuario puede usar. Un viewer
+ * aterrizaba en `/upload` y lo primero que veia era "Sin permiso".
+ */
+function HomeRedirect() {
+  const session = useSessionPermissions()
+  const entry = NAV.find((item) => !item.permission || hasPermission(session, item.permission))
+  return <Navigate to={entry?.to ?? '/documents'} replace />
+}
 
 const LoginPage = lazy(() => import('@/features/auth/login-page'))
 const UploadPage = lazy(() => import('@/features/upload/upload-page'))
@@ -67,7 +78,7 @@ const routes = createRoutesFromElements(
 
     <Route element={<ProtectedRoute />}>
       <Route element={<AppShell />}>
-        <Route index element={<Navigate to="/upload" replace />} />
+        <Route index element={<HomeRedirect />} />
 
         <Route element={<ProtectedRoute permission={PERMISSIONS.documentsCreate} />}>
           <Route path="/upload" element={<UploadPage />} />

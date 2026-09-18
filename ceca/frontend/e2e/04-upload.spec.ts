@@ -53,7 +53,8 @@ test('nativo duplicado con aviso, escaneo no valido sin etiqueta, aria-live y bo
   expect(await input.getAttribute('accept')).toContain('pdf')
   expect(await input.getAttribute('multiple')).not.toBeNull()
 
-  const live = page.locator('[aria-live="polite"]')
+  // El anuncio de la pagina, no la region de toasts (que tambien es polite).
+  const live = page.locator('main [aria-live="polite"][role="status"]')
   await expect(live).toHaveCount(1)
   await expect(live).toHaveText('')
 

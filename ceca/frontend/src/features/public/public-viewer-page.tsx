@@ -75,7 +75,8 @@ export default function PublicViewerPage() {
         </span>
       </header>
 
-      <main className="flex flex-1 flex-col gap-3 px-4 py-4">
+      {/* `items-start`: el badge es una pildora, no una barra a todo el ancho. */}
+      <main className="flex flex-1 flex-col items-start gap-3 px-4 py-4">
         {/* Un escaneo nunca se presenta como DeCA valido, tampoco en carretera. */}
         <ComplianceBadge status={data.compliance_status} />
         <PdfViewer token={token ?? ''} fileName={data.original_filename} />
@@ -88,11 +89,11 @@ export default function PublicViewerPage() {
             {t('public.openOrDownload')}
           </a>
         </Button>
-        {/* Solo la fecha. "Revision 0" es ruido: la revision se nombra cuando
-            de verdad hay una cadena detras. */}
+        {/* Solo la fecha. El backend numera desde 1: "Revision 1" es el original y
+            es ruido; la revision se nombra cuando de verdad hay una cadena detras. */}
         <p className="text-sm text-muted-foreground">
           {t('public.issuedOn', { date: formatDate(data.issued_at, locale) })}
-          {data.revision > 0 ? ` · ${t('public.revisionN', { n: data.revision })}` : ''}
+          {data.revision > 1 ? ` · ${t('public.revisionN', { n: data.revision })}` : ''}
         </p>
       </footer>
     </div>

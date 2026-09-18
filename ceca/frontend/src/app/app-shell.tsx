@@ -12,6 +12,7 @@ import {
   User,
   type Icon,
 } from '@phosphor-icons/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { LanguageSelect } from '@/components/common/language-select'
@@ -41,7 +42,8 @@ interface NavEntry {
   permission?: Permission
 }
 
-const NAV: NavEntry[] = [
+/** Orden del menu = orden de aterrizaje: la primera entrada permitida es la home. */
+export const NAV: NavEntry[] = [
   { to: '/upload', labelKey: 'nav.upload', icon: UploadSimple, permission: PERMISSIONS.documentsCreate },
   { to: '/deca/new', labelKey: 'nav.deca', icon: FileText, permission: PERMISSIONS.documentsCreate },
   { to: '/documents', labelKey: 'nav.documents', icon: FileText, permission: PERMISSIONS.documentsRead },
@@ -111,6 +113,7 @@ function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
 function SiteSwitcher() {
   const { site, sites, switchSite } = useAuth()
   const { t } = useI18n()
+  const queryClient = useQueryClient()
   const [busy, setBusy] = useState(false)
 
   if (!site) return null
@@ -120,6 +123,9 @@ function SiteSwitcher() {
     setBusy(true)
     try {
       await switchSite(siteId)
+      // Todo lo cacheado era del centro anterior: documentos, cola, historico.
+      // Sin esto la lista seguia ensenando el otro centro hasta recargar.
+      await queryClient.invalidateQueries()
       toast.success(t('shell.siteChanged'))
     } catch (error) {
       const message = error instanceof ApiError ? error.message : t('errors.unexpected')
@@ -135,10 +141,10 @@ function SiteSwitcher() {
     <div className="min-w-0 flex-1 sm:w-56 sm:flex-none">
       <Select value={site.id} disabled={busy} onValueChange={(value) => void change(value)}>
         <SelectTrigger
-          className="h-9 w-full min-w-0 gap-2 [&>span]:min-w-0"
+          className="h-9 w-full min-w-0 gap-2 text-sm [&>span]:min-w-0"
           aria-label={t('shell.site')}
         >
-          <Buildings size={16} aria-hidden="true" className="shrink-0" />
+          <Buildings size={16} aria-hidden="true" className="hidden shrink-0 sm:block" />
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -158,6 +164,7 @@ function UserMenu() {
   const { user, logout } = useAuth()
   const { t } = useI18n()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   if (!user) return null
 
@@ -175,7 +182,11 @@ function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
-            void logout().then(() => navigate('/login', { replace: true }))
+            void logout().then(() => {
+              // Nada del usuario anterior se queda en cache para el siguiente.
+              queryClient.clear()
+              navigate('/login', { replace: true })
+            })
           }}
         >
           <SignOut size={16} aria-hidden="true" />
@@ -224,7 +235,8 @@ export function AppShell() {
         >
           <SidebarSimple size={16} aria-hidden="true" />
         </Button>
-        <span className="shrink-0 font-bold tracking-tight">{t('app.name')}</span>
+        {/* En movil manda el selector de centro (MASTER §5); la marca cede el sitio. */}
+        <span className="hidden shrink-0 font-bold tracking-tight sm:inline">{t('app.name')}</span>
         <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1 sm:gap-2">
           <SiteSwitcher />
           {/* El idioma se queda en el cliente: no hay endpoint con el que un

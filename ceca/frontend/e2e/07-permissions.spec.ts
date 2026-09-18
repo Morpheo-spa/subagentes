@@ -8,8 +8,10 @@ import { ADMIN, apiLogin, DECA_VALUES, loginUi, nativePdf, shots, VIEWER } from 
 test('viewer: sin subir/generar en la interfaz; forzar la API responde 403 PERMISSION_DENIED', async ({
   page,
 }) => {
-  await loginUi(page, VIEWER, /\/(upload|documents)$/)
-  test.info().annotations.push({ type: 'landing-viewer', description: page.url() })
+  // Aterriza en lo primero que puede usar, no en una pantalla de "Sin permiso".
+  await loginUi(page, VIEWER, /\/documents$/)
+  await expect(page.getByRole('heading', { name: 'Documentos', level: 1 })).toBeVisible()
+  await expect(page.getByText('Sin permiso', { exact: true })).toHaveCount(0)
 
   const nav = page.getByRole('navigation', { name: 'Navegación principal' })
   await expect(nav).toBeVisible()
@@ -25,10 +27,10 @@ test('viewer: sin subir/generar en la interfaz; forzar la API responde 403 PERMI
 
   // Rutas protegidas a mano: sin permiso, sin pantalla de subida ni formulario.
   await page.goto('/upload')
-  await expect(page.getByRole('heading', { name: 'Sin permiso' })).toBeVisible()
+  await expect(page.getByText('Sin permiso', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Seleccionar archivos' })).toHaveCount(0)
   await page.goto('/deca/new')
-  await expect(page.getByRole('heading', { name: 'Sin permiso' })).toBeVisible()
+  await expect(page.getByText('Sin permiso', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Generar el PDF' })).toHaveCount(0)
   await shots(page, '07-viewer-sin-permiso')
 

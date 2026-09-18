@@ -35,7 +35,10 @@ export function LanguageSelect({
         aria-label={t('shell.language')}
       >
         <Translate size={16} aria-hidden="true" className="shrink-0" />
-        <SelectValue className={compact ? 'sr-only sm:not-sr-only' : undefined} />
+        {/* Radix `Select.Value` descarta `className`: el envoltorio hace de sr-only. */}
+        <span className={compact ? 'sr-only sm:not-sr-only' : undefined}>
+          <SelectValue />
+        </span>
       </SelectTrigger>
       <SelectContent>
         {LOCALES.map((item) => (

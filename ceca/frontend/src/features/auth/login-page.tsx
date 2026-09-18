@@ -64,7 +64,7 @@ export default function LoginPage() {
 
   if (status === 'authenticated') {
     const from = (location.state as { from?: string } | null)?.from
-    return <Navigate to={from ?? '/upload'} replace />
+    return <Navigate to={from ?? '/'} replace />
   }
 
   const submit = async (event: FormEvent) => {
@@ -73,7 +73,7 @@ export default function LoginPage() {
     setError(null)
     try {
       await login(email, password)
-      navigate((location.state as { from?: string } | null)?.from ?? '/upload', { replace: true })
+      navigate((location.state as { from?: string } | null)?.from ?? '/', { replace: true })
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : t('errors.unexpected'))
     } finally {

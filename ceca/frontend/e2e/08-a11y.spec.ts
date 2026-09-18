@@ -7,6 +7,7 @@ import {
   apiLogin,
   ensureLiveDocument,
   loginUi,
+  settle,
   toSpaUrl,
   useDarkTheme,
 } from './helpers'
@@ -15,6 +16,9 @@ const BLOCKING = new Set(['serious', 'critical'])
 
 /** Cero violaciones `serious`/`critical` (MASTER §10). */
 async function audit(page: Page, label: string) {
+  // Con una animacion a medias (sheet entrando, fila apareciendo) axe mide
+  // colores a medio fundir y da falsos positivos de contraste.
+  await settle(page)
   const results = await new AxeBuilder({ page }).analyze()
   const blocking = results.violations
     .filter((violation) => BLOCKING.has(violation.impact ?? ''))
