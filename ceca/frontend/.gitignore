@@ -5,3 +5,8 @@ coverage
 .env.local
 *.tsbuildinfo
 e2e/test-results
+
+# Playwright artefacts: regenerated on every run, never versioned.
+e2e/screenshots/
+e2e/test-results/
+playwright-report/

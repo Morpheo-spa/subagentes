@@ -178,6 +178,10 @@ def test_the_text_formatter_redacts_too() -> None:
     buffer = io.StringIO()
     logger = logging.getLogger("estampa.test.text")
     logger.propagate = False
+    # Explicit, or the level is inherited from the root logger: WARNING unless
+    # an earlier test happened to configure logging, which made this test
+    # pass in the full suite and fail on its own.
+    logger.setLevel(logging.INFO)
     handler = build_handler(environment="local", stream=buffer)
     logger.addHandler(handler)
     try:
