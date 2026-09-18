@@ -73,10 +73,15 @@ async def catalogue(db) -> Any:  # noqa: ANN001
     return payload
 
 
-def _context(mm: Any, site: Any) -> TenantContext:
-    """A tenant context built the way the JWT builds one: never from a body."""
+def _context(mm: Any, site: Any, user_id: uuid.UUID | None = None) -> TenantContext:
+    """A tenant context built the way the JWT builds one: never from a body.
+
+    Pass a real user's id whenever the call under test writes an audit row:
+    the audit trail keeps a foreign key to ``users``, and both databases now
+    refuse an actor that does not exist.
+    """
     return TenantContext(
-        user_id=uuid.uuid4(),
+        user_id=user_id or uuid.uuid4(),
         mm_id=mm.id,
         site_id=site.id,
         site_prefix=site.site_prefix,
@@ -113,14 +118,15 @@ async def test_a_deca_key_outside_the_catalogue_is_refused(
 
 
 async def test_catalogue_codes_are_still_accepted(
-    db, catalogue, make_tenant, make_document
+    db, catalogue, make_tenant, make_user, make_document
 ) -> None:
     """The guard must not refuse the fields the law actually asks for."""
     mm, site = await make_tenant()
+    actor = await make_user(mm, site, email="editor@estampa-demo.com", role="operator")
     document = await make_document(mm, site, origin=DocumentOrigin.UPLOADED_NATIVE)
 
     updated = await documents_service.update_deca(
-        db, _context(mm, site), document.id, deca={"origen": "Madrid"}
+        db, _context(mm, site, actor.id), document.id, deca={"origen": "Madrid"}
     )
 
     assert updated.deca["origen"] == "Madrid"

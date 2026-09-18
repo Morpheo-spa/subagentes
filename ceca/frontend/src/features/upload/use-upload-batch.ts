@@ -13,6 +13,7 @@ import { ApiError, request, upload } from '@/lib/api'
 import * as routes from '@/lib/routes'
 import {
   WARNING_DUPLICATE,
+  WARNING_METADATA_VISIBLE,
   WARNING_SCAN,
   type DocumentSummary,
   type UploadResponse,
@@ -31,7 +32,7 @@ export interface BatchItem {
   errorCode: string | null
   errorMessage: string | null
   document: DocumentSummary | null
-  /** Avisos del backend: duplicado, escaneo. El fichero se archiva igual. */
+  /** Avisos del backend: duplicado, escaneo, metadatos visibles. El fichero se archiva igual. */
   warnings: UploadWarning[]
 }
 
@@ -67,6 +68,20 @@ export function hasWarning(item: BatchItem, code: string): boolean {
 
 export function isDuplicate(item: BatchItem): boolean {
   return hasWarning(item, WARNING_DUPLICATE)
+}
+
+/**
+ * Metadatos del PDF (autor, titulo...) que quedaran a la vista de quien escanee
+ * el QR. Informativo: no bloquea nada, y pesa menos que duplicado o escaneo.
+ */
+export function metadataWarning(item: BatchItem): UploadWarning | null {
+  return item.warnings.find((warning) => warning.code === WARNING_METADATA_VISIBLE) ?? null
+}
+
+/** `params.fields` del aviso, como lista de nombres. Cualquier otra forma, vacia. */
+export function visibleMetadataFields(warning: UploadWarning | null): string[] {
+  const fields = warning?.params.fields
+  return Array.isArray(fields) ? fields.filter((f): f is string => typeof f === 'string') : []
 }
 
 /**

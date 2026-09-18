@@ -6,7 +6,6 @@ Which fields a delivery note must carry is data, not code: it is served from
 
 from __future__ import annotations
 
-import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -30,20 +29,8 @@ router = APIRouter(prefix="/deca", tags=["deca"])
 ReadCtx = Annotated[TenantContext, Depends(require_permission("documents:read"))]
 
 
-def _choices(raw: str | None) -> list[str]:
-    if not raw:
-        return []
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        return []
-    return [str(choice) for choice in parsed] if isinstance(parsed, list) else []
-
-
 def _field_read(definition: DecaFieldDefinition) -> DecaFieldRead:
-    return DecaFieldRead.model_validate(definition).model_copy(
-        update={"choices": _choices(definition.choices)}
-    )
+    return DecaFieldRead.model_validate(definition)
 
 
 @router.get("/fields", response_model=DecaCatalogResponse)

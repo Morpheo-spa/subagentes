@@ -79,7 +79,10 @@ class PrintJobItem(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     print_job_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("print_jobs.id", ondelete="CASCADE"), nullable=False
+        PgUUID(as_uuid=True),
+        ForeignKey("print_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     document_id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False

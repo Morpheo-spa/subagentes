@@ -18,8 +18,6 @@ from app.cookies import REFRESH_COOKIE
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
-pytestmark = pytest.mark.anyio
-
 
 async def _sign_in(client: Any, email: str) -> Any:
     return await client.post(

@@ -132,4 +132,54 @@ describe('cliente api', () => {
     ).rejects.toBeInstanceOf(ApiError)
     expect(refresh).not.toHaveBeenCalled()
   })
+
+  it('manda credentials: include para que viaje la cookie HttpOnly del refresh', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await request(routes.authRefresh(), { skipAuth: true })
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    expect(init.credentials).toBe('include')
+    // Sin cuerpo: el refresh token no esta en el cliente, esta en la cookie.
+    expect(init.body).toBeNull()
+  })
+
+  it('SESSION_STALE es un 401 como otro cualquiera: un refresh y un solo reintento', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ detail: { code: 'SESSION_STALE', message: 'permisos cambiados' } }, 401),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const refresh = vi.fn().mockResolvedValue('token-con-permisos-nuevos')
+    const onAuthFailure = vi.fn()
+    setAuthBridge({ getToken: () => 'token-viejo', refresh, onAuthFailure })
+
+    const result = await request<{ ok: boolean }>(routes.documentsList())
+
+    expect(result.ok).toBe(true)
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(onAuthFailure).not.toHaveBeenCalled()
+  })
+
+  it('si el refresh falla tras un SESSION_STALE, cierra sesion sin reintentar', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ detail: { code: 'SESSION_STALE', message: 'x' } }, 401))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const refresh = vi.fn().mockResolvedValue(null)
+    const onAuthFailure = vi.fn()
+    setAuthBridge({ getToken: () => 'token-viejo', refresh, onAuthFailure })
+
+    const error = await request(routes.documentsList()).catch((caught: unknown) => caught)
+
+    expect((error as ApiError).code).toBe('SESSION_STALE')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(onAuthFailure).toHaveBeenCalledTimes(1)
+  })
 })

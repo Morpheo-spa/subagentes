@@ -22,8 +22,6 @@ from sqlalchemy.exc import IntegrityError
 from app.models.tenancy import User, UserSite
 from app.security import hash_password
 
-pytestmark = pytest.mark.anyio
-
 VICTIM = "victim-admin@estampa-demo.com"
 
 

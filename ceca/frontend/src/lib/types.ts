@@ -36,9 +36,12 @@ export interface PageParams {
 
 /* ---- auth.py --------------------------------------------------------- */
 
+/**
+ * Solo el access token se serializa. El refresh token vuelve en la cookie
+ * HttpOnly `estampa_refresh` (`app/cookies.py`) y nunca llega a JavaScript.
+ */
 export interface TokenPair {
   access_token: string
-  refresh_token: string
   token_type: 'bearer'
   expires_in: number
 }
@@ -142,6 +145,8 @@ export interface UploadWarning {
 
 export const WARNING_DUPLICATE = 'DUPLICATE_DOCUMENT'
 export const WARNING_SCAN = 'DOCUMENT_IS_A_SCAN'
+/** `params.fields`: metadatos del PDF subido que se veran en publico. */
+export const WARNING_METADATA_VISIBLE = 'DOCUMENT_METADATA_VISIBLE'
 
 /** Una entrada por fichero enviado: un fichero malo no tumba la tanda. */
 export interface UploadItemResult {

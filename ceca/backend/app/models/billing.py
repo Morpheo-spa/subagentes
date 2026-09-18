@@ -6,7 +6,16 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import (
     UUID as PgUUID,  # noqa: N811 (alias avoids shadowing uuid.UUID)
@@ -60,7 +69,7 @@ class Subscription(Base, TimestampMixin, OptimisticLock):
         PgUUID(as_uuid=True), ForeignKey("mms.id", ondelete="CASCADE"), nullable=False
     )
     plan_code: Mapped[str] = mapped_column(
-        String(32), ForeignKey("plans.code", ondelete="RESTRICT"), nullable=False
+        String(32), ForeignKey("plans.code", ondelete="RESTRICT"), nullable=False, index=True
     )
     status: Mapped[SubscriptionStatus] = mapped_column(
         String(16), nullable=False, default=SubscriptionStatus.DISABLED
@@ -91,3 +100,23 @@ class UsageCounter(Base, TimestampMixin):
     documents_uploaded: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     labels_printed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     bytes_stored: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+
+
+class BillingEvent(Base):
+    """Every provider event ever received, keyed by the provider's own event id.
+
+    The row is inserted *before* the event is handled, inside the same
+    transaction: a replay (Stripe retrying, or someone re-sending a captured
+    delivery) collides on the primary key and is answered 200 without running
+    anything again, and a failure halfway leaves no row, so the retry does run
+    (audit E-20). ``processed_at`` is set once the handler has returned.
+    """
+
+    __tablename__ = "billing_events"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    type: Mapped[str] = mapped_column(String(120), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

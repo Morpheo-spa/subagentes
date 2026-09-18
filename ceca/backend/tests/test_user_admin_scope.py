@@ -20,8 +20,6 @@ from sqlalchemy import select
 from app.models.tenancy import Site, User, UserSite
 from app.security import hash_password
 
-pytestmark = pytest.mark.anyio
-
 
 async def _token(client: Any, email: str) -> str:
     response = await client.post(

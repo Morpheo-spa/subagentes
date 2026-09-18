@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.schemas.common import Schema
 
@@ -22,6 +23,28 @@ class DecaFieldRead(Schema):
     max_length: int | None = None
     pattern: str | None = None
     choices: list[str] = Field(default_factory=list)
+
+    @field_validator("choices", mode="before")
+    @classmethod
+    def _choices_from_storage(cls, value: object) -> list[str]:
+        """The column is JSON text, or NULL when a field has no fixed options.
+
+        Converting here, before validation, means any code path that builds this
+        schema from a row gets a list. Doing it after validation, as the router
+        once did, never ran: pydantic had already refused the NULL.
+        """
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                return []
+            return [str(item) for item in parsed] if isinstance(parsed, list) else []
+        if isinstance(value, list | tuple):
+            return [str(item) for item in value]
+        return []
+
     legal_reference: str | None = None
     sort_order: int
 

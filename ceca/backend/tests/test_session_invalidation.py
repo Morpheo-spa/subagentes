@@ -20,8 +20,6 @@ from sqlalchemy import select
 
 from app.models.tenancy import UserSite
 
-pytestmark = pytest.mark.anyio
-
 #: Reads its permissions straight from the token and touches nothing else, so a
 #: 200 here means the claims were trusted verbatim.
 PROBE = "/api/v1/users/roles"

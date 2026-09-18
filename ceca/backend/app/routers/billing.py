@@ -106,9 +106,11 @@ async def create_portal(ctx: ManageCtx, db: Db) -> PortalSessionResponse:
 async def stripe_webhook(request: Request, db: Db) -> WebhookAck:
     """Unauthenticated by design: the provider signature is the credential."""
     _require_enabled()
-    handled = await billing_service.handle_webhook(
+    outcome = await billing_service.handle_webhook(
         db,
         body=await request.body(),
         signature=request.headers.get("Stripe-Signature"),
     )
-    return WebhookAck(received=True, handled=bool(handled))
+    # A replayed event is acknowledged (200) and not handled again: Stripe only
+    # stops retrying on a 200, and the handler must not run twice (E-20).
+    return WebhookAck(received=True, handled=outcome.handled)

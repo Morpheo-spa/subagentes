@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
 import { ApiError } from '@/lib/api'
+import { formatNumber } from '@/lib/format'
 import { useI18n } from '@/lib/i18n'
 import { useAddToQueue } from '@/features/printing/printing-queries'
 import { DocumentSheet } from './document-sheet'
@@ -29,7 +30,7 @@ import {
 const INITIAL_PARAMS: DocumentListParams = { page: 1, page_size: 25 }
 
 export default function DocumentsPage() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [searchParams, setSearchParams] = useSearchParams()
   const [params, setParams] = useState<DocumentListParams>(INITIAL_PARAMS)
   const [selection, setSelection] = useState<RowSelectionState>({})
@@ -72,9 +73,23 @@ export default function DocumentsPage() {
   // El CSV va detras del bearer: se descarga con la sesion, no abriendo la URL.
   // `GET /documents/export.csv` exporta lo que filtren los parametros; no
   // acepta una lista de ids, asi que la seleccion no lo acota.
+  // Si el backend trunca (tope de filas), se dice con el total y el tope, y el
+  // aviso se queda hasta que el usuario lo cierre: no es un exito a medias.
   const exportCsv = () => {
     void downloadDocumentsCsv(params)
-      .then(() => toast.success(t('documents.exportStarted')))
+      .then((result) => {
+        if (!result.truncated) {
+          toast.success(t('documents.exportStarted'))
+          return
+        }
+        toast.warning(
+          t('documents.exportTruncated', {
+            total: formatNumber(result.total ?? 0, locale),
+            limit: formatNumber(result.rowLimit ?? 0, locale),
+          }),
+          { duration: Infinity },
+        )
+      })
       .catch((error: unknown) =>
         toast.error(error instanceof ApiError ? error.message : t('errors.unexpected')),
       )

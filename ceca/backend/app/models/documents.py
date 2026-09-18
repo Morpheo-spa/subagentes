@@ -83,6 +83,7 @@ class Document(Base, TenantScoped, TimestampMixin, OptimisticLock):
         PgUUID(as_uuid=True),
         ForeignKey("storage_backends.id", ondelete="RESTRICT"),
         nullable=False,
+        index=True,
     )
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
     byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
@@ -165,7 +166,10 @@ class ShareToken(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     document_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+        PgUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     token: Mapped[str] = mapped_column(String(64), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

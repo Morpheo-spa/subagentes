@@ -6,23 +6,29 @@ installation that does not sell anything never reaches the provider at all.
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.deps import TenantContext
 from app.errors import DomainError, NotFoundError
 from app.models.billing import (
+    BillingEvent,
     BillingProvider,
     Plan,
     Subscription,
     SubscriptionStatus,
 )
+
+logger = logging.getLogger("estampa.billing")
 
 PROVIDER_STATUS: dict[str, SubscriptionStatus] = {
     "trialing": SubscriptionStatus.TRIALING,
@@ -41,6 +47,21 @@ class HostedSession:
 
     url: str
     session_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WebhookOutcome:
+    """What became of one provider delivery."""
+
+    event_id: str
+    event_type: str
+    #: A handler ran for this event type.
+    handled: bool
+    #: The event id had been recorded already: nothing ran, the provider gets 200.
+    duplicate: bool = False
+
+
+EventHandler = Callable[[AsyncSession, Any], Awaitable[None]]
 
 
 Owner = TenantContext | UUID
@@ -146,27 +167,62 @@ async def handle_webhook(
     body: bytes | None = None,
     payload: bytes | None = None,
     signature: str | None = None,
-) -> bool:
-    """Apply a provider event. Replaying the same event changes nothing twice.
+) -> WebhookOutcome:
+    """Apply a provider event exactly once.
 
-    Returns whether this event type is one we act on.
+    The event id is recorded *first* and the handler runs *after*, inside one
+    savepoint: a delivery whose id is already there is answered as a duplicate
+    without touching anything (Stripe needs the 200 to stop retrying), and a
+    handler that fails rolls the record back with it, so the retry that
+    follows does run (audit E-20).
     """
     _require_enabled()
     event = _verified_event(body if body is not None else payload, signature)
-    data = event["data"]["object"]
+    event_id = str(event["id"])
+    event_type = str(event["type"])
 
-    handlers = {
+    handlers: dict[str, EventHandler] = {
         "checkout.session.completed": _on_checkout_completed,
         "customer.subscription.created": _on_subscription_changed,
         "customer.subscription.updated": _on_subscription_changed,
         "customer.subscription.deleted": _on_subscription_deleted,
         "invoice.payment_failed": _on_payment_failed,
     }
-    handler = handlers.get(event["type"])
-    if handler is None:
-        return False
-    await handler(db, data)
-    return True
+    handler = handlers.get(event_type)
+
+    async with db.begin_nested():
+        record = await _record_event(db, event_id, event_type)
+        if record is None:
+            logger.info(
+                "billing event replayed, not reprocessed",
+                extra={"event_id": event_id, "event_type": event_type},
+            )
+            return WebhookOutcome(event_id, event_type, handled=False, duplicate=True)
+        if handler is not None:
+            await handler(db, event["data"]["object"])
+        record.processed_at = datetime.now(UTC)
+        await db.flush()
+    return WebhookOutcome(event_id, event_type, handled=handler is not None)
+
+
+async def _record_event(db: AsyncSession, event_id: str, event_type: str) -> BillingEvent | None:
+    """Claim the event id. ``None`` means another delivery already holds it.
+
+    The lookup answers the common replay; the savepoint around the insert
+    answers the race, where two deliveries of the same event arrive together:
+    the second insert waits on the primary key and fails once the first
+    commits, and only that savepoint is rolled back.
+    """
+    if await db.get(BillingEvent, event_id) is not None:
+        return None
+    record = BillingEvent(id=event_id, type=event_type)
+    try:
+        async with db.begin_nested():
+            db.add(record)
+            await db.flush()
+    except IntegrityError:
+        return None
+    return record
 
 
 def _require_enabled() -> None:

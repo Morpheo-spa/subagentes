@@ -141,3 +141,8 @@ export function truncateMiddle(value: string, max = 42): string {
   const tail = Math.floor((max - 1) / 2)
   return `${value.slice(0, head)}…${value.slice(value.length - tail)}`
 }
+
+/** Lista legible ("a, b y c" / "a, b, and c"). Con `Intl`, sin concatenar comas. */
+export function formatList(items: string[], locale: Locale): string {
+  return new Intl.ListFormat(localeTag(locale), { style: 'long', type: 'conjunction' }).format(items)
+}

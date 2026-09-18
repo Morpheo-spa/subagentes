@@ -202,10 +202,10 @@ def _due_statement(now: datetime, limit: int) -> Select[tuple[Document, Retentio
 async def _apply(
     db: AsyncSession, document: Document, action: RetentionAction, now: datetime
 ) -> bool:
-    if action is RetentionAction.FLAG_ONLY:
+    if action == RetentionAction.FLAG_ONLY:
         await _log(db, document, FLAGGED_ACTION)
         return True
-    if action is RetentionAction.REVOKE_SHARE:
+    if action == RetentionAction.REVOKE_SHARE:
         await _revoke_tokens(db, document, now)
         await _log(db, document, REVOKED_ACTION)
         return True

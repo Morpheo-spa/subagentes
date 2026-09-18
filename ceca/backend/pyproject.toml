@@ -85,5 +85,7 @@ exclude_dirs = ["tests", ".venv", "alembic"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q --strict-markers"
+# -p no:anyio: two async plugins means two event loops, and asyncpg connections
+# cannot cross them. pytest-asyncio in auto mode is the only runner here.
+addopts = "-q --strict-markers -p no:anyio"
 filterwarnings = ["ignore::DeprecationWarning"]

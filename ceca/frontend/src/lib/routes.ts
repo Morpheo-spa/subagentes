@@ -2,16 +2,21 @@
  * Registro de rutas de la API.
  *
  * Es la UNICA lista de endpoints del cliente: ningun modulo escribe una ruta a
- * mano. La verdad esta en `backend/app/routers/`, y `routes.test.ts` compara
- * este registro contra esa tabla y ademas falla si alguien vuelve a colar una
- * ruta literal fuera de aqui.
+ * mano. La verdad esta en el OpenAPI del backend (`openapi.snapshot.json`):
+ * `contract.test.ts` comprueba que cada ruta de aqui existe alli con ese
+ * metodo, y `routes.test.ts` falla si alguien vuelve a colar una ruta literal
+ * fuera de este registro.
  *
  * Dos bases distintas:
  *  - `api`  -> cuelga de `/api/v1` (settings.api_prefix).
  *  - `root` -> el visor publico (`public.router` se monta SIN prefijo).
  */
 
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD'
+/**
+ * Sin `HEAD`: `HEAD /v/{token}` registra un acceso igual que `GET`, asi que
+ * "comprobar" antes de pedir contaria cada escaneo dos veces.
+ */
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 /** Sobre que base se resuelve la ruta. */
 export type RouteBase = 'api' | 'root'

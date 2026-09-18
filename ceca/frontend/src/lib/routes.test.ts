@@ -1,91 +1,13 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { declaredRoutes, type RouteBase } from './routes'
+import { declaredRoutes } from './routes'
 
 /**
- * La tabla de `backend/app/routers/`, transcrita.
- *
- * Si el backend anade, quita o mueve una ruta, este fichero se actualiza a mano
- * y el test dira que rutas del cliente se han quedado sin destino. Es a
- * proposito: que la desincronizacion salte aqui y no en produccion.
+ * Que cada ruta exista en el backend con ese metodo lo comprueba
+ * `contract.test.ts` contra el OpenAPI real (`openapi.snapshot.json`), no una
+ * tabla transcrita a mano. Aqui quedan las reglas del registro en si.
  */
-const BACKEND_ROUTES: Record<RouteBase, string[]> = {
-  api: [
-    'POST /auth/login',
-    'POST /auth/refresh',
-    'POST /auth/logout',
-    'POST /auth/switch-site',
-    'GET /auth/me',
-
-    'GET /documents/',
-    'POST /documents/',
-    'POST /documents/generate',
-    'GET /documents/export.csv',
-    'GET /documents/{}',
-    'GET /documents/{}/file',
-    'GET /documents/{}/history',
-    'GET /documents/{}/qr.png',
-    'GET /documents/{}/qr.svg',
-    'PATCH /documents/{}/deca',
-    'POST /documents/{}/revisions',
-    'POST /documents/{}/share/revoke',
-    'POST /documents/{}/withdraw',
-
-    'GET /deca/fields',
-    'POST /deca/validate',
-
-    'GET /printing/queue/',
-    'POST /printing/queue/',
-    'DELETE /printing/queue/',
-    'DELETE /printing/queue/{}',
-    'POST /printing/queue/reorder',
-    'GET /printing/templates',
-    'GET /printing/jobs/',
-    'POST /printing/jobs/',
-    'GET /printing/jobs/{}/render',
-    'POST /printing/jobs/{}/confirm',
-
-    'GET /storage/',
-    'POST /storage/',
-    'GET /storage/{}',
-    'PATCH /storage/{}',
-    'DELETE /storage/{}',
-    'POST /storage/{}/test',
-
-    'GET /retention/',
-    'POST /retention/',
-    'GET /retention/upcoming',
-    'GET /retention/{}',
-    'PATCH /retention/{}',
-    'DELETE /retention/{}',
-
-    'GET /sites/',
-    'POST /sites/',
-    'GET /sites/{}',
-    'PATCH /sites/{}',
-    'DELETE /sites/{}',
-
-    'GET /users/',
-    'POST /users/',
-    'GET /users/roles',
-    'GET /users/{}',
-    'PATCH /users/{}',
-
-    'GET /billing/plans',
-    'GET /billing/subscription',
-    'GET /billing/usage',
-    'POST /billing/checkout',
-    'POST /billing/portal',
-  ],
-  // El visor publico se monta sin `api_prefix`.
-  root: ['GET /v/{}', 'HEAD /v/{}', 'GET /v/{}/file'],
-}
-
-/** `/documents/{documentId}` y `/documents/{id}` son la misma ruta. */
-function normalize(method: string, template: string): string {
-  return `${method} ${template.replace(/\{\w+\}/g, '{}')}`
-}
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -95,16 +17,7 @@ function sourceFiles(dir: string): string[] {
   })
 }
 
-describe('contrato de rutas con el backend', () => {
-  it('toda ruta que usa el cliente existe en el backend', () => {
-    const missing = declaredRoutes()
-      .map((route) => ({ ...route, signature: normalize(route.method, route.template) }))
-      .filter((route) => !BACKEND_ROUTES[route.base].includes(route.signature))
-      .map((route) => `${route.signature} (base ${route.base})`)
-
-    expect(missing).toEqual([])
-  })
-
+describe('registro de rutas', () => {
   it('el visor publico no cuelga de /api/v1', () => {
     const publicRoutes = declaredRoutes().filter((route) => route.template.startsWith('/v/'))
     expect(publicRoutes.length).toBeGreaterThan(0)

@@ -376,7 +376,7 @@ async def update_deca(
     """
     document = await get_document(db, ctx, document_id)
     _reject_unrevisable(document)
-    if DocumentOrigin(document.origin) is DocumentOrigin.GENERATED:
+    if DocumentOrigin(document.origin) == DocumentOrigin.GENERATED:
         raise DomainError("DECA_EDIT_REQUIRES_REVISION", status_code=409)
     if expected_version is not None and expected_version != document.version:
         raise ConflictError("VERSION_CONFLICT")
@@ -462,7 +462,7 @@ async def open_stream(db: AsyncSession, document: Document) -> AsyncIterator[byt
             status_code=410,
             withdrawn_at=document.withdrawn_at.isoformat(),
         )
-    if DocumentStatus(document.status) is not DocumentStatus.READY:
+    if DocumentStatus(document.status) != DocumentStatus.READY:
         raise DomainError("DOCUMENT_NOT_READY", status_code=409)
 
     backend = await tenant_backend(db, document)
@@ -951,13 +951,13 @@ def _deca_status(has_text_layer: bool, complete: bool) -> DecaStatus:
 
 def _recompute_compliance(document: Document) -> None:
     """A scan is never a DeCA; anything else needs full data and an embedded QR."""
-    if DocumentOrigin(document.origin) is DocumentOrigin.UPLOADED_SCANNED:
+    if DocumentOrigin(document.origin) == DocumentOrigin.UPLOADED_SCANNED:
         document.compliance_status = ComplianceStatus.NOT_A_DECA
         return
     if document.superseded_at is not None:
         document.compliance_status = ComplianceStatus.SUPERSEDED
         return
-    is_complete = DecaStatus(document.deca_status) is DecaStatus.COMPLETE
+    is_complete = DecaStatus(document.deca_status) == DecaStatus.COMPLETE
     document.compliance_status = (
         ComplianceStatus.COMPLIANT
         if is_complete and document.qr_embedded

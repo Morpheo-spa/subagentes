@@ -1,13 +1,18 @@
 /**
  * Sesion de Estampa.
  *
- * Los dos tokens viven SOLO en memoria (refs de React, nunca `localStorage`,
- * `sessionStorage` ni `window.*`): CLAUDE.md §3.6.
+ * El access token vive SOLO en memoria (ref de React, nunca `localStorage`,
+ * `sessionStorage` ni `window.*`). El refresh token no llega nunca a
+ * JavaScript: el backend lo deja en la cookie HttpOnly `estampa_refresh`
+ * (`app/cookies.py`, `Path=/api/v1/auth`, `SameSite=strict`) y el navegador la
+ * adjunta el solo a `/auth/refresh`, `/auth/logout` y `/auth/switch-site`.
+ * Por eso esas rutas van sin token en el cuerpo, y por eso la sesion SI
+ * sobrevive a recargar la pagina: al arrancar se intenta `POST /auth/refresh`;
+ * 200 = hay sesion, cualquier otra cosa = a login.
  *
- * Consecuencia honesta: `POST /auth/refresh` pide el refresh token en el cuerpo
- * (`RefreshRequest`) y el backend no emite ninguna cookie httpOnly, asi que al
- * recargar la pagina no hay nada con lo que rehidratar y toca volver a entrar.
- * La alternativa seria guardarlo en el navegador, que es justo lo prohibido.
+ * `POST /auth/refresh` ademas exige que el `Origin` sea el `PUBLIC_BASE_URL`
+ * del backend (403 `CROSS_ORIGIN_REJECTED`): en desarrollo, el proxy de Vite
+ * (ver `vite.config.ts` y `README.md`).
  */
 import {
   createContext,
@@ -19,7 +24,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { request, setAuthBridge } from './api'
+import { ApiError, request, setAuthBridge } from './api'
 import * as routes from './routes'
 import type { MembershipSummary, MeResponse, SessionResponse, SiteSummary, UserSummary } from './types'
 
@@ -31,6 +36,7 @@ export interface AuthValue {
   permissions: string[]
   /** Sites a los que el usuario puede cambiar. */
   sites: MembershipSummary[]
+  /** `loading` solo durante el arranque, mientras se rehidrata desde la cookie. */
   status: 'loading' | 'authenticated' | 'anonymous'
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
@@ -40,19 +46,20 @@ export interface AuthValue {
 const AuthContext = createContext<AuthValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Tokens en memoria. Deliberadamente refs: no se serializan ni se persisten.
+  // Access token en memoria. Deliberadamente un ref: no se serializa ni persiste.
   const accessRef = useRef<string | null>(null)
-  const refreshRef = useRef<string | null>(null)
+  // El arranque va una sola vez, tambien bajo StrictMode: dos refresh a la vez
+  // con la misma cookie hacen que el segundo llegue con el token ya rotado.
+  const bootedRef = useRef(false)
 
   const [user, setUser] = useState<UserSummary | null>(null)
   const [site, setSite] = useState<SiteSummary | null>(null)
   const [permissions, setPermissions] = useState<string[]>([])
   const [sites, setSites] = useState<MembershipSummary[]>([])
-  const [status, setStatus] = useState<AuthValue['status']>('anonymous')
+  const [status, setStatus] = useState<AuthValue['status']>('loading')
 
   const clearSession = useCallback(() => {
     accessRef.current = null
-    refreshRef.current = null
     setUser(null)
     setSite(null)
     setPermissions([])
@@ -62,7 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const adopt = useCallback((session: SessionResponse) => {
     accessRef.current = session.tokens.access_token
-    refreshRef.current = session.tokens.refresh_token
     setUser(session.user)
     setSite(session.site)
     setPermissions(session.permissions)
@@ -79,28 +85,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Puente con el cliente HTTP: le damos el token y el refresh, no al reves.
+  /**
+   * `POST /auth/refresh`, sin cuerpo: el token va en la cookie. Devuelve la
+   * sesion nueva (con los permisos vigentes: asi se resuelve `SESSION_STALE`)
+   * o `null` si no hay sesion que rescatar.
+   */
+  const refreshSession = useCallback(async (): Promise<SessionResponse | null> => {
+    try {
+      const session = await request<SessionResponse>(routes.authRefresh(), { skipAuth: true })
+      adopt(session)
+      return session
+    } catch (error) {
+      // Un 401 es lo normal sin cookie o con ella caducada. Cualquier otra cosa
+      // (403 CROSS_ORIGIN_REJECTED, USER_INACTIVE, red) se registra por codigo.
+      if (import.meta.env.DEV && error instanceof ApiError && error.status !== 401) {
+        console.warn(`[auth] refresh rechazado: ${error.code}`)
+      }
+      return null
+    }
+  }, [adopt])
+
+  // Puente con el cliente HTTP: le damos el token y como refrescarlo.
   useEffect(() => {
     setAuthBridge({
       getToken: () => accessRef.current,
-      refresh: async () => {
-        const token = refreshRef.current
-        if (!token) return null
-        try {
-          const session = await request<SessionResponse>(routes.authRefresh(), {
-            body: { refresh_token: token },
-            skipAuth: true,
-          })
-          adopt(session)
-          return session.tokens.access_token
-        } catch {
-          return null
-        }
-      },
+      refresh: async () => (await refreshSession())?.tokens.access_token ?? null,
       onAuthFailure: clearSession,
     })
     return () => setAuthBridge(null)
-  }, [adopt, clearSession])
+  }, [refreshSession, clearSession])
+
+  // Arranque: rehidratar desde la cookie. 200 = sesion; si no, a login.
+  useEffect(() => {
+    if (bootedRef.current) return
+    bootedRef.current = true
+    void refreshSession().then(async (session) => {
+      if (!session) {
+        clearSession()
+        return
+      }
+      await loadMemberships()
+    })
+  }, [refreshSession, clearSession, loadMemberships])
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -115,9 +141,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(async () => {
-    const token = refreshRef.current
     try {
-      await request(routes.authLogout(), { body: { refresh_token: token } })
+      // Sin cuerpo: el backend revoca el bearer y la cookie, y borra la cookie.
+      await request(routes.authLogout())
     } catch {
       /* la sesion local se cierra igual */
     } finally {

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { request, requestBlob } from '@/lib/api'
+import { request, requestBlob, requestRaw } from '@/lib/api'
 import * as routes from '@/lib/routes'
 import type {
   Acknowledgement,
@@ -75,18 +75,49 @@ export function useRevokeShare() {
   })
 }
 
+/** Lo que el backend cuenta de la exportacion en sus cabeceras `X-Export-*`. */
+export interface CsvExportResult {
+  /** `X-Export-Truncated`: el filtro casaba mas filas de las que caben. */
+  truncated: boolean
+  /** `X-Export-Total`: filas que casaban con el filtro (no las exportadas). */
+  total: number | null
+  /** `X-Export-Row-Limit`: tope de filas por exportacion. */
+  rowLimit: number | null
+}
+
+function headerInt(response: Response, name: string): number | null {
+  const raw = response.headers.get(name)
+  if (raw === null || raw === '') return null
+  const value = Number(raw)
+  return Number.isFinite(value) ? value : null
+}
+
 /**
  * El CSV va detras del bearer, asi que no vale abrir la URL en otra pestana:
  * se descarga con la sesion en memoria y se entrega como fichero.
+ *
+ * `GET /documents/export.csv` esta limitado a `X-Export-Row-Limit` filas. Si
+ * `X-Export-Truncated` es `true`, el fichero acaba en una fila
+ * `# EXPORT_TRUNCATED max_rows=...`; aqui el CSV no se procesa (se entrega tal
+ * cual), y la pagina avisa al usuario con el total y el tope.
  */
-export async function downloadDocumentsCsv(params: DocumentListParams): Promise<void> {
-  const blob = await requestBlob(routes.documentsExportCsv(), { query: { ...params } })
+export async function downloadDocumentsCsv(params: DocumentListParams): Promise<CsvExportResult> {
+  const response = await requestRaw(routes.documentsExportCsv(), {
+    query: { ...params },
+    accept: 'blob',
+  })
+  const blob = await response.blob()
   const url = URL.createObjectURL(blob)
   const anchor = window.document.createElement('a')
   anchor.href = url
   anchor.download = 'documentos.csv'
   anchor.click()
   URL.revokeObjectURL(url)
+  return {
+    truncated: response.headers.get('X-Export-Truncated') === 'true',
+    total: headerInt(response, 'X-Export-Total'),
+    rowLimit: headerInt(response, 'X-Export-Row-Limit'),
+  }
 }
 
 /** El PDF archivado, tambien por streaming autenticado. */

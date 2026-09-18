@@ -92,11 +92,23 @@ def database_url(tmp_path_factory: pytest.TempPathFactory) -> str:
     return _sqlite_url(tmp_path_factory.mktemp("db"))
 
 
-@pytest.fixture(scope="session")
-def engine(database_url: str):  # noqa: ANN201
+@pytest.fixture
+async def engine(database_url: str):  # noqa: ANN201
+    """One engine per test, disposed at the end.
+
+    pytest-asyncio runs every test on its own event loop. A session-scoped
+    engine hands later tests pooled asyncpg connections that belong to the first
+    test's loop, which surfaces as "attached to a different loop" and "another
+    operation is in progress". aiosqlite tolerates that; Postgres, the database
+    CI actually runs against, does not.
+    """
     if database_url.startswith("sqlite"):
         _make_portable(Base.metadata)
-    return create_async_engine(database_url, future=True)
+    engine = create_async_engine(database_url, future=True)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
 
 
 @pytest.fixture

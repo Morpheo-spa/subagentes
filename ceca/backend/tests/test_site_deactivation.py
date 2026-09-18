@@ -11,10 +11,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
-pytestmark = pytest.mark.anyio
-
 
 async def _sign_in(client: Any, email: str) -> Any:
     return await client.post(

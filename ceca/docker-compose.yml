@@ -139,7 +139,11 @@ services:
       - traefik.http.routers.estampa-api.service=estampa-api
       - traefik.http.routers.estampa-api.middlewares=security-headers@file,api-ratelimit@file,upload-body-limit@file
       # The public QR viewer: same service, stricter headers, never indexed.
-      - traefik.http.routers.estampa-viewer.rule=PathPrefix(`/v/`)
+      # A browser opening a scanned QR sends Accept: text/html and must land on the
+      # SPA's viewer page (frontend router below). The page then fetches the same
+      # path as JSON, and the PDF as application/pdf, and only those reach the API.
+      # Without this negation every scan received raw JSON instead of a document.
+      - traefik.http.routers.estampa-viewer.rule=PathPrefix(`/v/`) && !HeaderRegexp(`Accept`, `text/html`)
       - traefik.http.routers.estampa-viewer.entrypoints=web,websecure
       - traefik.http.routers.estampa-viewer.priority=110
       - traefik.http.routers.estampa-viewer.service=estampa-api

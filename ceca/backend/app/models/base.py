@@ -24,6 +24,13 @@ NAMING_CONVENTION = {
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
+    #: Columns filled by the database (created_at, updated_at) are fetched back
+    #: in the INSERT's RETURNING instead of being marked expired. Expired
+    #: attributes need a query to read, and in an async session a plain
+    #: attribute read cannot run one: serialising a freshly inserted row into a
+    #: response then dies with MissingGreenlet. Every mapper inherits this.
+    __mapper_args__ = {"eager_defaults": True}
+
 
 def uuid_pk() -> Mapped[uuid.UUID]:
     return mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -83,4 +90,6 @@ class OptimisticLock:
     @declared_attr.directive
     @classmethod
     def __mapper_args__(cls) -> dict[str, Any]:  # noqa: D105
-        return {"version_id_col": cls.__dict__["version"]}
+        # Overrides Base.__mapper_args__ on these models, so it must carry
+        # eager_defaults along or the async serialisation bug returns here.
+        return {"version_id_col": cls.__dict__["version"], "eager_defaults": True}

@@ -16,6 +16,9 @@ class Settings(BaseSettings):
 
     environment: Literal["local", "staging", "production"] = "local"
     debug: bool = False
+    #: Threshold for every logger in the process. Outside ``local`` the output is
+    #: one JSON object per line, so a log shipper can index it (see app/logging.py).
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
     # --- Identity -----------------------------------------------------------
     app_name: str = "Estampa"
@@ -94,6 +97,12 @@ class Settings(BaseSettings):
     @classmethod
     def _strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _upper_log_level(cls, value: object) -> object:
+        """``LOG_LEVEL=info`` is what people type; the logging module wants ``INFO``."""
+        return value.upper() if isinstance(value, str) else value
 
     @property
     def is_production(self) -> bool:

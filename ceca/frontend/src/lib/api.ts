@@ -77,7 +77,7 @@ export function getApiLocale(): Locale {
 }
 
 /** Un unico refresh compartido aunque fallen varias peticiones a la vez. */
-function refreshOnce(): Promise<string | null> {
+export function refreshOnce(): Promise<string | null> {
   if (!authBridge) return Promise.resolve(null)
   if (!refreshInFlight) {
     refreshInFlight = authBridge.refresh().finally(() => {
@@ -162,13 +162,19 @@ async function rawRequest(route: ApiRoute, options: RequestOptions, token: strin
 
   return fetch(buildUrl(route, query), {
     method: route.method,
+    // La cookie del refresh tiene que viajar aunque la API este en otro origen.
+    credentials: 'include',
     headers: requestHeaders,
     signal: signal ?? null,
     body: body === undefined ? null : JSON.stringify(body),
   })
 }
 
-async function send(route: ApiRoute, options: RequestOptions): Promise<Response> {
+/**
+ * La `Response` cruda, ya autenticada y con el reintento unico. Para quien
+ * necesita cabeceras ademas del cuerpo (la exportacion CSV y sus `X-Export-*`).
+ */
+export async function requestRaw(route: ApiRoute, options: RequestOptions = {}): Promise<Response> {
   const token = authBridge?.getToken() ?? null
   let response: Response
 
@@ -204,7 +210,7 @@ async function send(route: ApiRoute, options: RequestOptions): Promise<Response>
 
 /** Llama a una ruta del registro. El verbo lo pone la ruta, no quien la usa. */
 export async function request<T>(route: ApiRoute, options: RequestOptions = {}): Promise<T> {
-  const response = await send(route, options)
+  const response = await requestRaw(route, options)
   if (response.status === 204) return undefined as T
 
   const contentType = response.headers.get('Content-Type') ?? ''
@@ -218,7 +224,7 @@ export async function request<T>(route: ApiRoute, options: RequestOptions = {}):
  * desde un object URL.
  */
 export async function requestBlob(route: ApiRoute, options: RequestOptions = {}): Promise<Blob> {
-  const response = await send(route, { ...options, accept: 'blob' })
+  const response = await requestRaw(route, { ...options, accept: 'blob' })
   return response.blob()
 }
 
@@ -250,6 +256,7 @@ export function upload<T>(options: UploadOptions): Promise<T> {
       if (options.retentionPolicyId) form.append('retention_policy_id', options.retentionPolicyId)
 
       xhr.open(options.route.method, buildUrl(options.route), true)
+      xhr.withCredentials = true
       xhr.setRequestHeader('Accept', 'application/json')
       xhr.setRequestHeader('Accept-Language', currentLocale)
       if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)

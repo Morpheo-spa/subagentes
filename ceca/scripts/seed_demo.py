@@ -158,7 +158,10 @@ async def seed_storage(session: AsyncSession, mm: MM, site: Site) -> StorageBack
         match={"mm_id": mm.id, "site_id": site.id, "name": "Almacén local"},
         defaults={
             "kind": StorageKind.LOCAL,
-            "config": {"base_path": "/var/lib/estampa/storage/demo"},
+            "config": {  # Relative on purpose: it resolves under LOCAL_STORAGE_ROOT, whatever the
+                # deployment set it to. An absolute path only worked with the default root.
+                "base_path": "demo"
+            },
             "is_default": True,
             "is_active": True,
         },

@@ -4,3 +4,4 @@ coverage
 .env
 .env.local
 *.tsbuildinfo
+e2e/test-results

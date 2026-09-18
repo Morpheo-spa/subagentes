@@ -75,7 +75,10 @@ class Site(Base, TimestampMixin):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     mm_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("mms.id", ondelete="RESTRICT"), nullable=False
+        PgUUID(as_uuid=True),
+        ForeignKey("mms.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     site_prefix: Mapped[str] = mapped_column(String(8), nullable=False)
@@ -129,7 +132,10 @@ class UserSite(Base, TimestampMixin):
         PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     site_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("sites.id", ondelete="CASCADE"), nullable=False
+        PgUUID(as_uuid=True),
+        ForeignKey("sites.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="operator")
     extra_permissions: Mapped[list[str]] = mapped_column(

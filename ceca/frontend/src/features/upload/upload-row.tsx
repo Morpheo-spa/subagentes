@@ -1,4 +1,12 @@
-import { ArrowClockwise, Eye, Printer, Prohibit, Trash, WarningCircle } from '@phosphor-icons/react'
+import {
+  ArrowClockwise,
+  Eye,
+  Info,
+  Printer,
+  Prohibit,
+  Trash,
+  WarningCircle,
+} from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
 import { Guid } from '@/components/common/guid'
 import { QrImage } from '@/components/common/qr-image'
@@ -7,10 +15,17 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { TableCell, TableRow } from '@/components/ui/table'
-import { formatBytes, formatDate, truncateMiddle } from '@/lib/format'
+import { formatBytes, formatDate, formatList, truncateMiddle } from '@/lib/format'
 import { useI18n } from '@/lib/i18n'
 import { WARNING_DUPLICATE } from '@/lib/types'
-import { isDuplicate, isPrintable, isScan, type BatchItem } from './use-upload-batch'
+import {
+  isDuplicate,
+  isPrintable,
+  isScan,
+  metadataWarning,
+  visibleMetadataFields,
+  type BatchItem,
+} from './use-upload-batch'
 
 export function UploadRow({
   item,
@@ -27,6 +42,14 @@ export function UploadRow({
   const document = item.document
   const printable = isPrintable(item)
   const duplicateWarning = item.warnings.find((warning) => warning.code === WARNING_DUPLICATE)
+  const metadataFields = visibleMetadataFields(metadataWarning(item))
+
+  // El mensaje del backend ya viene traducido; las claves locales cubren solo
+  // los codigos que nacen en el cliente. Un codigo sin clave no pinta la clave.
+  const fallbackKey = `upload.errorCodes.${item.errorCode ?? 'UNKNOWN_ERROR'}`
+  const fallback = t(fallbackKey)
+  const errorText =
+    item.errorMessage ?? (fallback === fallbackKey ? t('upload.errorCodes.UNKNOWN_ERROR') : fallback)
 
   return (
     <TableRow className="estampa-row-enter align-top">
@@ -60,6 +83,15 @@ export function UploadRow({
             </Button>
           </>
         ) : null}
+
+        {/* Metadatos del PDF que se veran en publico. Peso menor que duplicado o
+            escaneo: color neutro e icono informativo. No bloquea nada. */}
+        {metadataFields.length > 0 ? (
+          <p className="mt-2 flex items-start gap-1.5 text-sm text-muted-foreground">
+            <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+            {t('upload.metadataVisibleWarning', { fields: formatList(metadataFields, locale) })}
+          </p>
+        ) : null}
       </TableCell>
 
       <TableCell className="min-w-44">
@@ -81,9 +113,7 @@ export function UploadRow({
             </Badge>
             {/* El mensaje ya SALE del codigo: repetirlo debajo en mono no
                 anade informacion, solo ruido. */}
-            <span className="text-meta text-destructive-text">
-              {item.errorMessage ?? t(`upload.errorCodes.${item.errorCode ?? 'UNKNOWN_ERROR'}`)}
-            </span>
+            <span className="text-meta text-destructive-text">{errorText}</span>
           </div>
         ) : item.status === 'queued' ? (
           <Badge variant="neutral">{t('status.queuedUpload')}</Badge>

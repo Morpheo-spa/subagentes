@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FormField, FormLabel, useFormControlProps } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
@@ -50,6 +51,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  // Al arrancar se intenta rehidratar la sesion desde la cookie: mientras
+  // tanto no se ensena el formulario, que parpadearia si la sesion existe.
+  if (status === 'loading') {
+    return (
+      <main className="flex min-h-dvh items-center justify-center px-4" aria-busy="true">
+        <Skeleton className="h-80 w-full max-w-md" />
+      </main>
+    )
+  }
 
   if (status === 'authenticated') {
     const from = (location.state as { from?: string } | null)?.from

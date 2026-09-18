@@ -283,7 +283,7 @@ async def confirm_job(
 ) -> PrintJob:
     """Close a run. A closed job never reopens; a reprint is a new job."""
     job = await _job(db, ctx, job_id)
-    if PrintJobStatus(job.status) is not PrintJobStatus.PENDING:
+    if PrintJobStatus(job.status) != PrintJobStatus.PENDING:
         raise DomainError("PRINT_JOB_ALREADY_CLOSED")
 
     succeeded = success if ok is None else ok
@@ -376,7 +376,7 @@ def render_labels(
     Each label dict carries ``qr_url``, ``filename``, ``short_id`` and
     ``uploaded_at``; :func:`labels_for_job` builds them.
     """
-    blanks = max(0, job.start_position - 1) if template.layout is PrintLayout.SHEET else 0
+    blanks = max(0, job.start_position - 1) if template.layout == PrintLayout.SHEET else 0
     cells = [_BLANK_CELL] * blanks
     cells += [_label_cell(label) for label in labels]
 
@@ -443,7 +443,7 @@ async def _increment_print_counts(db: AsyncSession, ctx: TenantContext, job: Pri
 
 
 def _page_count(template: LabelTemplate, label_count: int, start_position: int) -> int:
-    if template.layout is PrintLayout.SINGLE:
+    if template.layout == PrintLayout.SINGLE:
         return label_count
     return ceil((start_position - 1 + label_count) / template.slots)
 
