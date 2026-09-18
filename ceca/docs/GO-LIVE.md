@@ -21,7 +21,9 @@ Fecha de la última verificación: 2026-09-18. Rama: `claude/ceca-pdf-qr-manager
 | Visor público: cabeceras `noindex`, `no-store`, `nosniff`, CSP, `inline`, 404 uniforme, `HEAD` registrado | `smoke.py` y `tests/test_public_viewer.py` |
 | Guardarraíl SSRF de storage a través del API real | `smoke.py` con `ALLOW_PRIVATE_STORAGE_ENDPOINTS=false`: el endpoint de metadatos de la nube se rechaza con `STORAGE_ENDPOINT_NOT_PUBLIC` |
 | `/health/ready` | 200 con Postgres, Redis y storage arriba; 503 en 31 ms con Redis inalcanzable, sin filtrar el error |
-| Planificador de retención | `python -m app.tasks.scheduler --help`; modo `--once` disponible para operadores |
+| Barrido de retención, ruta completa | Worker de Dramatiq real contra Redis real; un documento caducado a mano; `python -m app.tasks.scheduler --once`; el worker lo retira, escribe `document.withdrawn_by_retention` con actor de sistema en `audit_logs`, y su QR pasa a 404 |
+| Healthcheck de la imagen | Encontrado y corregido: usaba `curl`, que la imagen de runtime no instala, así que habría marcado el contenedor como no sano siempre. Ahora usa Python y pregunta a `/health/live` |
+| Fusión de `docker-compose.yml` + `docker-compose.dev.yml` | `docker compose config` (CLI sin demonio): ocho servicios, readiness del API en `/health/ready`, planificador con las mismas restricciones que el resto, solo Traefik publica puertos |
 | Frontend | `typecheck`, `lint`, 90 tests unitarios, `npm run build` (bundle de producción) |
 | Contrato frontend ↔ backend | `src/lib/contract.test.ts` contra el OpenAPI real del backend: rutas, campos y enumeraciones |
 | Gate completo con base real y API en marcha | `DATABASE_URL=… SMOKE_BASE_URL=… bash scripts/ci.sh`: todo en verde, incluidos `alembic check` y la prueba de humo |
@@ -30,7 +32,7 @@ Fecha de la última verificación: 2026-09-18. Rama: `claude/ceca-pdf-qr-manager
 
 | Qué | Estado |
 |-----|--------|
-| `docker-compose.yml` y `docker-compose.dev.yml` | YAML válido y `docker compose config` correcto según el agente de infraestructura. **No se ha levantado el stack con Docker**: no hay Docker en el entorno de desarrollo |
+| Levantar el stack con Docker | **No se ha hecho**: hay CLI de Docker pero no demonio. La configuración resuelve; las imágenes no se han construido ni arrancado |
 | `backend/Dockerfile` y `frontend/Dockerfile` | Leídos, no construidos |
 | Configuración de nginx del frontend (SPA fallback para `/v/{token}`) | Leída, no ejecutada: nginx no está instalado en el entorno |
 | Traefik: TLS con Let's Encrypt, redirección, rate limits, cabeceras | Configuración estática y dinámica escritas y validadas como YAML. **Ningún certificado se ha emitido nunca** |
