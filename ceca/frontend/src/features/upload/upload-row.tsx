@@ -1,6 +1,5 @@
 import { ArrowClockwise, Eye, Printer, Prohibit, Trash, WarningCircle } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
-import { CopyButton } from '@/components/common/copy-button'
 import { Guid } from '@/components/common/guid'
 import { QrImage } from '@/components/common/qr-image'
 import { ComplianceBadge, StatusBadge } from '@/components/common/status-badge'
@@ -37,28 +36,29 @@ export function UploadRow({
         </p>
         <p className="text-meta text-muted-foreground">{formatBytes(item.size, locale)}</p>
 
+        {/* Avisos en linea: icono + texto del color del estado. Sin caja: el
+            aviso es informacion, no una tarjeta dentro de otra. */}
         {isDuplicate(item) ? (
-          <div className="mt-2 rounded-md border border-warning bg-warning-surface p-2 text-warning-text">
-            <p className="flex items-start gap-1.5 text-sm">
-              <WarningCircle size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
-              {t('upload.duplicateWarning', {
-                date: formatDate(String(duplicateWarning?.params.uploaded_at ?? ''), locale),
-              })}
-            </p>
-          </div>
+          <p className="mt-2 flex items-start gap-1.5 text-sm text-warning-text">
+            <WarningCircle size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+            {t('upload.duplicateWarning', {
+              date: formatDate(String(duplicateWarning?.params.uploaded_at ?? ''), locale),
+            })}
+          </p>
         ) : null}
 
-        {/* docs/DECA.md §1: un escaneo no produce un DeCA valido. */}
+        {/* docs/DECA.md §1: un escaneo no produce un DeCA valido. El aviso y la
+            via correcta se mantienen enteros; solo pierden el marco. */}
         {isScan(item) ? (
-          <div className="mt-2 rounded-md border border-destructive bg-destructive-surface p-2 text-destructive-text">
-            <p className="flex items-start gap-1.5 text-sm">
+          <>
+            <p className="mt-2 flex items-start gap-1.5 text-sm text-destructive-text">
               <Prohibit size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
               {t('upload.notADecaWarning')}
             </p>
-            <Button size="sm" variant="outline" className="mt-2" asChild>
+            <Button size="sm" variant="link" className="px-0" asChild>
               <Link to="/deca/new">{t('upload.generateInstead')}</Link>
             </Button>
-          </div>
+          </>
         ) : null}
       </TableCell>
 
@@ -79,12 +79,11 @@ export function UploadRow({
               <WarningCircle size={14} aria-hidden="true" />
               {t('status.failed')}
             </Badge>
+            {/* El mensaje ya SALE del codigo: repetirlo debajo en mono no
+                anade informacion, solo ruido. */}
             <span className="text-meta text-destructive-text">
               {item.errorMessage ?? t(`upload.errorCodes.${item.errorCode ?? 'UNKNOWN_ERROR'}`)}
             </span>
-            {item.errorCode ? (
-              <span className="estampa-mono text-meta text-muted-foreground">{item.errorCode}</span>
-            ) : null}
           </div>
         ) : item.status === 'queued' ? (
           <Badge variant="neutral">{t('status.queuedUpload')}</Badge>
@@ -112,13 +111,6 @@ export function UploadRow({
         <div className="flex flex-wrap items-center gap-1">
           {item.status === 'ready' && document ? (
             <>
-              {publicUrl ? (
-                <CopyButton
-                  value={publicUrl}
-                  label={t('upload.copyUrl')}
-                  successMessage={t('upload.urlCopied')}
-                />
-              ) : null}
               {/* Un escaneo NO ofrece etiqueta: no es un DeCA valido. */}
               {printable ? (
                 <Button

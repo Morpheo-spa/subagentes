@@ -1,4 +1,10 @@
-import { ClockCounterClockwise, Printer, Prohibit, QrCode } from '@phosphor-icons/react'
+import {
+  ClockCounterClockwise,
+  DotsThree,
+  Printer,
+  Prohibit,
+  QrCode,
+} from '@phosphor-icons/react'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
@@ -8,9 +14,14 @@ import { ErrorState } from '@/components/common/error-state'
 import { Guid } from '@/components/common/guid'
 import { QrImage } from '@/components/common/qr-image'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
@@ -79,8 +90,11 @@ export function DocumentSheet({
               </div>
             </SheetHeader>
 
+            {/* Retirada: el aviso se conserva entero (fecha y motivo), en linea
+                y sin caja. */}
             {document.withdrawn_at ? (
-              <p className="rounded-md border border-destructive bg-destructive-surface p-3 text-sm text-destructive-text">
+              <p className="flex items-start gap-1.5 text-sm text-destructive-text">
+                <Prohibit size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
                 {t('documents.withdrawnOn', {
                   date: formatDate(document.withdrawn_at, locale),
                   reason: document.withdrawn_reason ?? t('documents.noReason'),
