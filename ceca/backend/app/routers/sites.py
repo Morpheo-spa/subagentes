@@ -8,9 +8,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import Select, func, select
 
+from app.cache import invalidate_user_sessions
 from app.deps import Db, TenantContext, require_permission
 from app.errors import ConflictError, NotFoundError
-from app.models.tenancy import Site
+from app.models.tenancy import Site, UserSite
 from app.routers import ClientIpHash, Page
 from app.schemas.common import Acknowledgement, PageResponse
 from app.schemas.tenancy import SiteCreate, SiteRead, SiteUpdate
@@ -107,13 +108,28 @@ async def update_site(
     return SiteRead.model_validate(site)
 
 
+async def _member_ids(db: Db, site_id: uuid.UUID) -> list[uuid.UUID]:
+    """Everyone whose session asserts membership of this site."""
+    stmt = select(UserSite.user_id).where(UserSite.site_id == site_id)
+    return list((await db.execute(stmt)).scalars().all())
+
+
 @router.delete("/{site_id}", response_model=Acknowledgement)
 async def deactivate_site(
     site_id: uuid.UUID, ctx: ManageCtx, db: Db, ip_hash: ClientIpHash
 ) -> Acknowledgement:
-    """Sites are deactivated, never deleted: their documents outlive them."""
+    """Sites are deactivated, never deleted: their documents outlive them.
+
+    Deactivating a site revokes access for everyone who works there. Their
+    tokens still assert membership of it, and while the request for the closed
+    site was already refused, the session itself stayed alive and usable for any
+    other site the member belongs to. Voiding it is the honest outcome: the
+    grant is gone, so the token that carries it should be gone too.
+    """
     site = await _get_site(db, ctx, site_id)
     site.is_active = False
     await db.flush()
+    for user_id in await _member_ids(db, site_id):
+        await invalidate_user_sessions(user_id)
     await _audit(db, ctx, site, "site.deactivated", ip_hash)
     return Acknowledgement()

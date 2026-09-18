@@ -367,10 +367,14 @@ def _write_clean_metadata(pdf: pdfcanvas.Canvas, document_id: UUID) -> None:
     pdf.setProducer(PRODUCER)
 
 
-def embed_qr(pdf_bytes: bytes, qr_url: str) -> bytes:
-    """Stamp the QR onto the first page of an existing native PDF."""
+def embed_qr(pdf_bytes: bytes, qr_url: str, *, filename: str = "documento.pdf") -> bytes:
+    """Stamp the QR onto the first page of an existing native PDF.
+
+    Every page gets rewritten, so the same ceilings that guard inspection guard
+    this: the file being stamped is one somebody uploaded.
+    """
     reader = PdfReader(BytesIO(pdf_bytes), strict=False)
-    _reject_declared_excess(reader, "documento.pdf")
+    _reject_declared_excess(reader, filename)
     first = reader.pages[0]
     width = float(first.mediabox.width)
     height = float(first.mediabox.height)
@@ -400,7 +404,9 @@ def embed_qr(pdf_bytes: bytes, qr_url: str) -> bytes:
 
 async def embed_qr_offloaded(pdf_bytes: bytes, qr_url: str, *, filename: str) -> bytes:
     """:func:`embed_qr` in a worker thread: it rewrites every page of the file."""
-    return await _offloaded(lambda: embed_qr(pdf_bytes, qr_url), filename=filename)
+    return await _offloaded(
+        lambda: embed_qr(pdf_bytes, qr_url, filename=filename), filename=filename
+    )
 
 
 @lru_cache

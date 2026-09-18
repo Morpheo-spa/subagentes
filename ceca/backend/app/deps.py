@@ -174,8 +174,7 @@ async def admin_scope(ctx: TenantContext, db: AsyncSession) -> AdminScope:
         or any(membership.role in COMPANY_ADMIN_ROLES for membership in memberships),
         site_ids=frozenset(membership.site_id for membership in memberships),
         permissions_by_site={
-            membership.site_id: frozenset(membership.permissions())
-            for membership in memberships
+            membership.site_id: frozenset(membership.permissions()) for membership in memberships
         },
     )
 

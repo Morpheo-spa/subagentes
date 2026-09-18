@@ -26,14 +26,17 @@ from app.services import documents as documents_service
 #: attacker-supplied file at ``Content-Disposition: inline`` on the API's own
 #: origin. A polyglot PDF that a sniffing browser decides is HTML would run
 #: there. The policy gives the document nothing: no script, no network, no
-#: framing, only the object it is.
+#: framing, only the object it is. ``allow-downloads`` is the one thing the
+#: sandbox keeps, because an inspector at the roadside has to be able to save
+#: the delivery note they just opened.
 PUBLIC_HEADERS = {
     "X-Robots-Tag": "noindex, nofollow",
     "Cache-Control": "no-store",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy": (
-        "default-src 'none'; object-src 'self'; base-uri 'none'; frame-ancestors 'none'; sandbox"
+        "default-src 'none'; object-src 'self'; base-uri 'none'; "
+        "frame-ancestors 'none'; sandbox allow-downloads"
     ),
 }
 

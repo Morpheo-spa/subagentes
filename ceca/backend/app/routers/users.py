@@ -183,18 +183,14 @@ async def _replace_memberships(
             continue
         current.role = wanted.role
         current.extra_permissions = list(wanted.extra_permissions)
-    untouched = [
-        site_id for site_id in existing if not scope.may_administer(site_id)
-    ]
+    untouched = [site_id for site_id in existing if not scope.may_administer(site_id)]
     for site_id, removed in existing.items():
         if scope.may_administer(site_id):
             await db.delete(removed)
     return [membership.site_id for membership in memberships] + untouched
 
 
-async def _assert_default_site_is_a_membership(
-    db: Db, user: User, site_id: uuid.UUID
-) -> None:
+async def _assert_default_site_is_a_membership(db: Db, user: User, site_id: uuid.UUID) -> None:
     """``default_site_id`` is a target that arrives in the body, so it is checked.
 
     It grants nothing by itself — the login only ever picks a site the user is a
