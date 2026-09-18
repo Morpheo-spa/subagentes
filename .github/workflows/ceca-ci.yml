@@ -58,6 +58,14 @@ jobs:
       ENVIRONMENT: local
       DEBUG: "false"
       BILLING_ENABLED: "false"
+      # The smoke test drives a real API started below, with the production
+      # posture: the SSRF guard on and no trusted proxy in front.
+      PUBLIC_BASE_URL: http://127.0.0.1:8000
+      LOCAL_STORAGE_ROOT: /tmp/estampa-ci-storage
+      ALLOW_PRIVATE_STORAGE_ENDPOINTS: "false"
+      TRUSTED_PROXY_COUNT: "0"
+      SMOKE_BASE_URL: http://127.0.0.1:8000
+      SMOKE_ORIGIN: http://127.0.0.1:8000
 
     steps:
       - uses: actions/checkout@v4
@@ -93,6 +101,24 @@ jobs:
         working-directory: ceca/backend
         run: .venv/bin/python -m alembic upgrade head
 
+      - name: Seed the demo tenant
+        working-directory: ceca/backend
+        run: |
+          mkdir -p "$LOCAL_STORAGE_ROOT"
+          .venv/bin/python ../scripts/seed_demo.py
+
+      - name: Start the API for the smoke test
+        working-directory: ceca/backend
+        run: |
+          nohup .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/estampa-api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health/ready > /dev/null 2>&1; then
+              echo "API ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "API did not become ready; log follows"; cat /tmp/estampa-api.log; exit 1
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -107,3 +133,7 @@ jobs:
 
       - name: Run the gate
         run: bash scripts/ci.sh
+
+      - name: API log
+        if: failure()
+        run: cat /tmp/estampa-api.log || true

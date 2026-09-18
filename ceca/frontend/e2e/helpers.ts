@@ -1,6 +1,9 @@
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
+
+const E2E_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 /* ---- Cuentas de demo ------------------------------------------------- */
 
@@ -39,7 +42,7 @@ export const DECA_VALUES: Record<string, string> = {
 /* ---- Capturas ---------------------------------------------------------- */
 
 export const WIDTHS = [375, 768, 1024, 1440] as const
-export const SCREENSHOT_DIR = path.resolve(__dirname, 'screenshots')
+export const SCREENSHOT_DIR = path.resolve(E2E_DIR, 'screenshots')
 
 /**
  * Captura la pantalla actual en los cuatro anchos de MASTER §5 y deja el

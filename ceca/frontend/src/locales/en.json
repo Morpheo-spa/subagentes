@@ -138,7 +138,7 @@
     "generatedIncompleteToast": "DeCA generated, but incomplete: required data is missing.",
     "generatedToast": "DeCA generated successfully",
     "incompleteNotice": "{count} required fields are missing: it will be saved as incomplete.",
-    "legalRef": "(art. {ref})",
+    "legalRef": "({ref})",
     "openInDocuments": "Open in Documents",
     "partiesNotDistinct": "The contracting shipper and the actual carrier cannot share the same tax ID.",
     "revisionSaved": "Revision created",

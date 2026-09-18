@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { ADMIN, apiListDocuments, apiLogin, loginUi, shots } from './helpers'
+import { ADMIN, apiLogin, loginUi, shots } from './helpers'
 
 /**
  * 2. Cambio de centro. El admin pertenece a dos: al cambiar, la lista de
- * documentos pasa al contexto del otro centro.
+ * documentos pasa al contexto del otro centro y coincide con lo que el
+ * backend devuelve para ese centro.
  */
 test('el selector de centro cambia el contexto de la lista de documentos', async ({ page, request }) => {
   await loginUi(page, ADMIN)
@@ -21,53 +22,64 @@ test('el selector de centro cambia el contexto de la lista de documentos', async
     if ((await rows.count()) === 0) return [] as string[]
     return rows.locator('td:nth-child(2)').allTextContents()
   }
-  await expect
-    .poll(async () => (await listNames()).length > 0 || (await page.getByText('Aún no hay documentos').count()) > 0)
-    .toBe(true)
+  const isEmpty = async () => (await page.getByText('Aún no hay documentos').count()) > 0
+  await expect.poll(async () => (await listNames()).length > 0 || (await isEmpty())).toBe(true)
   const before = await listNames()
 
   await switcher.click()
   const options = page.getByRole('option')
   await expect(options).toHaveCount(2)
-  const names = await options.allTextContents()
-  const other = names.find((name) => name.trim() !== initialSite)
+  const names = (await options.allTextContents()).map((name) => name.trim())
+  const other = names.find((name) => name !== initialSite)
   expect(other, 'un segundo centro en el selector').toBeDefined()
 
   const switchResponse = page.waitForResponse(
-    (response) => response.url().endsWith('/api/v1/auth/switch-site') && response.request().method() === 'POST',
+    (response) =>
+      response.url().endsWith('/api/v1/auth/switch-site') && response.request().method() === 'POST',
   )
   await page.getByRole('option', { name: other! }).click()
   expect((await switchResponse).status(), 'POST /auth/switch-site').toBe(200)
   await expect(page.getByText('Centro de trabajo cambiado')).toBeVisible()
-  await expect(switcher).toHaveText(other!.trim())
+  await expect(switcher).toHaveText(other!)
 
   // La lista cambia de contexto: otro conjunto de documentos, o vacio.
   await expect
-    .poll(async () => {
-      const after = await listNames()
-      const empty = (await page.getByText('Aún no hay documentos').count()) > 0
-      return empty || JSON.stringify(after) !== JSON.stringify(before)
-    }, { message: 'la lista de documentos debe cambiar con el centro' })
+    .poll(
+      async () => (await isEmpty()) || JSON.stringify(await listNames()) !== JSON.stringify(before),
+      { message: 'la lista de documentos debe cambiar con el centro' },
+    )
     .toBe(true)
+  const after = await listNames()
 
-  // Lo que dice el backend para ese centro es lo que ensena la pantalla.
+  // Contraste con el backend: el total del otro centro es lo que se ve.
   const session = await apiLogin(request, ADMIN)
+  const me = await (await request.get('/api/v1/auth/me', { headers: session.headers })).json()
+  const otherSite = (me.sites as { site: { id: string; name: string } }[]).find(
+    (membership) => membership.site.name === other,
+  )
+  expect(otherSite, 'el otro centro existe en /auth/me').toBeDefined()
   const switched = await request.post('/api/v1/auth/switch-site', {
-    headers: session.headers,
-    data: { site_id: await page.evaluate(() => null) ?? undefined },
-  }).catch(() => null)
-  void switched
+    headers: { ...session.headers, Origin: new URL(page.url()).origin },
+    data: { site_id: otherSite!.site.id },
+  })
+  expect(switched.status()).toBe(200)
+  const otherToken = (await switched.json()).tokens.access_token as string
+  const otherList = await (
+    await request.get('/api/v1/documents/?page=1&page_size=50', {
+      headers: { Authorization: `Bearer ${otherToken}` },
+    })
+  ).json()
+  expect(after.length).toBe(Math.min(otherList.total as number, 25))
+
   await shots(page, '02-documentos-otro-centro')
 
-  // Y la sesion recuerda el centro al recargar.
+  // La sesion recuerda el centro al recargar.
   await page.reload()
-  await expect(page.getByRole('combobox', { name: 'Centro de trabajo' })).toHaveText(other!.trim())
+  await expect(page.getByRole('combobox', { name: 'Centro de trabajo' })).toHaveText(other!)
 
   // Volver al centro inicial para no dejar la sesion cambiada.
   await page.getByRole('combobox', { name: 'Centro de trabajo' }).click()
   await page.getByRole('option', { name: initialSite }).click()
   await expect(page.getByRole('combobox', { name: 'Centro de trabajo' })).toHaveText(initialSite)
-  const back = await listNames()
-  expect(back).toEqual(before)
-  void apiListDocuments
+  await expect.poll(async () => JSON.stringify(await listNames())).toBe(JSON.stringify(before))
 })

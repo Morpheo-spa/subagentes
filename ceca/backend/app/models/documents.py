@@ -138,9 +138,15 @@ class Document(Base, TenantScoped, TimestampMixin, OptimisticLock):
 
     @property
     def is_available(self) -> bool:
-        """Whether the public viewer may serve this file."""
+        """Whether the public viewer may serve this file.
+
+        Compared with ``==``, never ``is``: the status column is a plain string
+        in the database, so a row loaded from it holds ``"ready"`` rather than
+        the enum member. Identity held in tests, where the object was built in
+        the same session, and failed for every real row.
+        """
         return (
-            self.status is DocumentStatus.READY
+            self.status == DocumentStatus.READY
             and self.withdrawn_at is None
             and self.superseded_at is None
         )
@@ -149,8 +155,8 @@ class Document(Base, TenantScoped, TimestampMixin, OptimisticLock):
     def is_valid_deca(self) -> bool:
         """A scan can never be a DeCA, whatever metadata it carries."""
         return (
-            self.origin is not DocumentOrigin.UPLOADED_SCANNED
-            and self.compliance_status is ComplianceStatus.COMPLIANT
+            self.origin != DocumentOrigin.UPLOADED_SCANNED
+            and self.compliance_status == ComplianceStatus.COMPLIANT
         )
 
 

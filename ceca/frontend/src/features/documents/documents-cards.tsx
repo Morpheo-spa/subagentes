@@ -28,7 +28,8 @@ export function DocumentsCards({
       {documents.map((document) => (
         <li key={document.id}>
           <Card className={cn(isExpiringSoon(document.expires_at) && 'border-l-4 border-l-warning')}>
-            <CardContent className="flex flex-col gap-2 p-4">
+            {/* `items-start`: los badges son pildoras, no barras a todo el ancho. */}
+            <CardContent className="flex flex-col items-start gap-2 p-4">
               <button
                 type="button"
                 className="cursor-pointer text-left font-medium underline-offset-2 hover:underline"

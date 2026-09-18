@@ -84,8 +84,8 @@ docker compose exec -T postgres pg_restore -U estampa -d estampa --no-owner \
 docker compose exec api alembic upgrade head
 
 # 5. Arrancar y comprobar
-docker compose start api worker
-curl -fsS http://localhost/api/v1/../health
+docker compose start api worker scheduler
+curl -fsS http://localhost/health/ready
 ```
 
 Después de restaurar, **comprueba la coherencia entre registro y ficheros**: un documento en
@@ -161,10 +161,33 @@ avisa, y no hay que recifrar nada.
 
 ---
 
-## 4. Barrido de retención manual
+## 4. Barrido de retención
 
-El barrido normal lo lanza el worker a la hora `RETENTION_SWEEP_HOUR_UTC`. Para ejecutarlo a
-mano — tras una caída del worker, o para un site concreto:
+El barrido lo encola el servicio `scheduler` (`python -m app.tasks.scheduler`, ADR-007) cada
+día a la hora `RETENTION_SWEEP_HOUR_UTC` (UTC, en punto) y lo ejecuta el worker. Sin el
+`scheduler` levantado **no hay barrido**: compruébalo en `docker compose ps` igual que el
+worker. Una sola réplica.
+
+Dos barridos que coincidan (una ejecución manual durante la programada, un worker reiniciado a
+mitad) no retiran nada dos veces: el actor toma un arrendamiento en Redis (`lock:retention:sweep`,
+15 minutos) y el que no lo consigue escribe `retention sweep skipped: another sweep holds the
+lock` y termina. Si un barrido muere sin liberarlo, el siguiente espera como mucho esos 15
+minutos.
+
+```bash
+# ¿Cuándo es el próximo? El scheduler lo escribe al arrancar.
+docker compose logs --tail=20 scheduler
+
+# ¿Se ejecutó anoche? Un barrido deja siempre una de estas dos líneas en el worker.
+docker compose logs --since 24h worker | grep -E "retention sweep (processed|skipped)"
+```
+
+Si el scheduler estuvo caído a la hora programada y vuelve en menos de seis horas, dispara el
+barrido pendiente al arrancar. Más tarde, espera a la noche siguiente: lánzalo a mano.
+
+### Barrido manual
+
+Tras una caída larga, o para comprobar una política nueva:
 
 ```bash
 # Qué caducaría, sin tocar nada
@@ -176,9 +199,8 @@ GROUP BY site_id ORDER BY vencidos DESC;"
 ```
 
 ```bash
-# Ejecutar el barrido
-docker compose exec api python -c \
-  "from app.tasks.retention import sweep_expired; sweep_expired.send()"
+# Encolar un barrido ahora. Seguro aunque coincida con el programado.
+docker compose exec scheduler python -m app.tasks.scheduler --once
 ```
 
 Reglas que el barrido no rompe, y que hay que respetar también a mano:
@@ -187,12 +209,14 @@ Reglas que el barrido no rompe, y que hay que respetar también a mano:
   la fila queda con `withdrawn_at` y `withdrawn_reason`. El registro legal sobrevive al PDF.
 - El plazo mínimo legal es **un año**; el valor por defecto de Estampa es 365 días. Bajarlo de ahí
   no es una configuración, es un incumplimiento.
-- El actor es idempotente: repetirlo no retira dos veces ni pierde trazas.
+- El actor es idempotente: repetirlo no retira dos veces ni pierde trazas, y dos ejecuciones
+  simultáneas se serializan con el arrendamiento de Redis.
 - Toda retirada deja `AuditLog`. Si un cliente pregunta por un documento que ya no está, la
   respuesta sale de ahí.
 
 Para pausar el barrido de un site, pon su política en `action = 'flag_only'`. No desactives el
-worker: también procesa subidas y QR.
+worker: también procesa subidas y QR. Para pausarlo en toda la instalación, para el servicio
+`scheduler`; el worker sigue.
 
 ---
 
@@ -215,9 +239,10 @@ Si devuelve `False`, no hay desincronización: los límites no se aplican y nadi
 
 ```bash
 # 2. Webhooks fallidos: Stripe Dashboard > Developers > Webhooks > el endpoint > Failed.
-#    Reenvíalos desde ahí. Ojo: el manejador NO deduplica por event.id todavia
-#    (auditoria E-20). Hoy es inofensivo porque los handlers solo asignan estado,
-#    pero reenviar el mismo evento lo reprocesa entero.
+#    Reenvíalos desde ahí sin miedo: cada evento se registra por su id en
+#    billing_events antes de procesarse (E-20). Uno ya visto responde 200 con
+#    handled=false y no se vuelve a aplicar; uno que falló a mitad no deja fila,
+#    así que el reintento sí se aplica.
 
 # 3. Reconciliar un MM concreto contra Stripe
 docker compose exec api python -c \
@@ -235,7 +260,15 @@ WHERE status IN ('active','trialing') AND provider = 'stripe'
 -- Periodos caducados hace más de un día: el webhook de renovación no llegó
 SELECT mm_id, plan_code, current_period_end FROM subscriptions
 WHERE current_period_end < now() - interval '1 day' AND status = 'active';
+
+-- Qué eventos han llegado y cuáles se aplicaron (processed_at nulo = nunca terminó)
+SELECT id, type, received_at, processed_at FROM billing_events
+ORDER BY received_at DESC LIMIT 50;
 ```
+
+Si necesitas que un evento concreto se vuelva a aplicar de verdad (no debería hacer falta: los
+handlers asignan estado, y `reconcile_subscription` lee de Stripe), borra su fila de
+`billing_events` y reenvíalo desde el panel.
 
 Mientras dure la incidencia, **no bloquees la subida de documentos**. Un albarán que no se puede
 archivar por un problema de cobro es un problema legal del cliente causado por nosotros. Si hay
@@ -251,14 +284,59 @@ dos claves de Stripe impide arrancar, a propósito.
 ## 6. Comprobaciones rápidas
 
 ```bash
-docker compose ps                         # ¿qué está vivo?
-curl -fsS http://localhost/health         # API
-docker compose logs -f --tail=100 api     # errores recientes, con X-Request-ID
-docker compose exec redis redis-cli ping  # broker y lista negra de JWT (usa REDISCLI_AUTH)
+docker compose ps                                # ¿qué está vivo? api, worker, scheduler...
+curl -fsS http://localhost/health/live           # el proceso de la API responde
+curl -sS  http://localhost/health/ready          # ...y ve Postgres, Redis y el storage
+docker compose logs -f --tail=100 api            # errores recientes, con request_id
+docker compose exec redis redis-cli ping         # broker y lista negra de JWT (usa REDISCLI_AUTH)
 docker compose exec postgres pg_isready -U estampa
 ```
 
-Un error que ve un usuario lleva `X-Request-ID`. Pídeselo: con él la traza aparece en los logs.
+### Salud: `live` y `ready`
+
+Dos endpoints con semántica de Kubernetes, y conviene no confundirlos en los healthchecks:
+
+| Endpoint | Mira | Úsalo para |
+|----------|------|------------|
+| `GET /health/live` | Nada: solo que el proceso responde | Reiniciar el contenedor (`HEALTHCHECK` de la imagen, liveness) |
+| `GET /health/ready` | Postgres (`SELECT 1`), Redis (`PING`) y que `LOCAL_STORAGE_ROOT` existe y se puede escribir; 1,5 s de tiempo máximo por comprobación | Dar o quitar tráfico (readiness, `depends_on: condition: service_healthy`) |
+| `GET /health` | Alias de `/health/live` | Compatibilidad |
+
+Si la liveness apuntara a `/health/ready`, una caída de Redis reiniciaría la API en bucle sin
+arreglar nada. `ready` responde `503` con `{"status":"not_ready","checks":{...}}` y cada
+comprobación vale `ok` o `failed`, nada más: el motivo va al log de la API con `request_id`,
+nunca al cuerpo de la respuesta.
+
+```bash
+curl -sS http://localhost/health/ready
+# {"status":"ready","checks":{"database":"ok","redis":"ok","storage":"ok"}}
+```
+
+### Logs
+
+Fuera de `ENVIRONMENT=local` cada evento es **una línea JSON** con `timestamp`, `level`,
+`logger`, `message` y `request_id`, más los campos que aporte cada mensaje. El nivel se fija
+con `LOG_LEVEL` (`INFO` por defecto; `DEBUG` es ruidoso, no peligroso: las credenciales se
+redactan antes de escribirse). En local sale texto legible con los mismos campos.
+
+Un error que ve un usuario lleva `X-Request-ID`. Pídeselo: es el `request_id` de todas las
+líneas de esa petición, incluida la del log de acceso.
+
+```bash
+# Toda la traza de una petición
+docker compose logs --since 1h api | grep '"request_id":"<id>"'
+
+# Errores de la última hora
+docker compose logs --since 1h api | grep '"level":"ERROR"'
+
+# Log de acceso: método, ruta (la plantilla, nunca el token del visor ni la query), estado, ms
+docker compose logs --since 1h api | grep '"logger":"estampa.access"'
+```
+
+Lo que **no** vas a encontrar en un log, por diseño: cabeceras `Authorization` y `Cookie`,
+contraseñas, tokens de sesión o de share, claves de Stripe, la query string y el token de
+`/v/{token}` (se escribe literalmente `/v/{token}`). Si alguien los pasa en `extra` o los mete
+en el mensaje, salen como `[REDACTED]`. Los healthchecks no dejan línea de acceso.
 
 ---
 
@@ -362,12 +440,12 @@ sed -i "s|^REDIS_URL=redis://:[^@]*@|REDIS_URL=redis://:$NEW@|" .env.production
 python scripts/check_env.py .env.production
 
 # 3. Reiniciar quien se conecta. Redis no hace falta: ya tiene la nueva.
-docker compose up -d --force-recreate api worker
+docker compose up -d --force-recreate api worker scheduler
 
 # 4. Comprobar.
 docker compose exec redis redis-cli ping            # PONG (REDISCLI_AUTH lleva la nueva)
 docker compose logs --tail=50 worker | grep -i noauth   # vacío
-curl -fsS https://tu-dominio.es/health
+curl -fsS https://tu-dominio.es/health/ready        # "redis":"ok"
 
 # 5. Fijar la nueva también en el arranque de Redis, para el próximo reinicio.
 docker compose up -d --force-recreate redis

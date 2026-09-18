@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import uuid
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
@@ -35,12 +36,22 @@ def _seed_environment() -> None:
         "STORAGE_SECRET_KEY": Fernet.generate_key().decode(),
         "ACCESS_LOG_IP_SALT": "test-access-log-salt-0000",
         "BILLING_ENABLED": "false",
+        "LOCAL_STORAGE_ROOT": tempfile.mkdtemp(prefix="estampa-test-storage-"),
     }
     for key, value in defaults.items():
         os.environ.setdefault(key, value)
 
 
 _seed_environment()
+
+# A developer's backend/.env must never reach the suite. pydantic-settings would
+# read it for anything the seeding above leaves unset, and the storage tests
+# once passed or failed depending on whether ALLOW_PRIVATE_STORAGE_ENDPOINTS was
+# switched on in that file. Disable the file before Settings is first built.
+import app.config as _app_config  # noqa: E402
+
+_app_config.Settings.model_config["env_file"] = None
+_app_config.get_settings.cache_clear()
 
 from sqlalchemy.dialects import postgresql  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
@@ -92,6 +103,22 @@ def database_url(tmp_path_factory: pytest.TempPathFactory) -> str:
     return _sqlite_url(tmp_path_factory.mktemp("db"))
 
 
+def _enforce_foreign_keys(engine: Any) -> None:
+    """SQLite ignores foreign keys unless asked, and that silence is a trap.
+
+    An audit row pointing at a user that does not exist sailed through the local
+    suite and blew up only on Postgres, the database CI and production run.
+    With the pragma on, SQLite refuses the same things Postgres refuses.
+    """
+    from sqlalchemy import event
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _on_connect(dbapi_connection: Any, _record: Any) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
 @pytest.fixture
 async def engine(database_url: str):  # noqa: ANN201
     """One engine per test, disposed at the end.
@@ -105,6 +132,8 @@ async def engine(database_url: str):  # noqa: ANN201
     if database_url.startswith("sqlite"):
         _make_portable(Base.metadata)
     engine = create_async_engine(database_url, future=True)
+    if database_url.startswith("sqlite"):
+        _enforce_foreign_keys(engine)
     try:
         yield engine
     finally:
@@ -185,7 +214,9 @@ def make_storage_backend(db: AsyncSession) -> Callable[..., Any]:
             site_id=site.id,
             name="local",
             kind=StorageKind.LOCAL,
-            config={"base_path": "/tmp/estampa-test"},  # noqa: S108
+            # Relative: it resolves under LOCAL_STORAGE_ROOT, which the seeding
+            # above points at a temporary directory. An absolute path is refused.
+            config={"base_path": "test"},
             is_default=True,
             is_active=True,
         )

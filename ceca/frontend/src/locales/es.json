@@ -138,7 +138,7 @@
     "generatedIncompleteToast": "DeCA generado, pero incompleto: faltan datos obligatorios.",
     "generatedToast": "DeCA generado correctamente",
     "incompleteNotice": "Faltan {count} campos obligatorios: se guardará como incompleto.",
-    "legalRef": "(art. {ref})",
+    "legalRef": "({ref})",
     "openInDocuments": "Abrir en Documentos",
     "partiesNotDistinct": "El cargador contractual y el transportista efectivo no pueden tener el mismo NIF.",
     "revisionSaved": "Revisión creada",

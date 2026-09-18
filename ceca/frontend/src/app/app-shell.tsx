@@ -129,21 +129,28 @@ function SiteSwitcher() {
     }
   }
 
+  // En movil el selector se queda con el ancho que sobra (y trunca); a partir
+  // de `sm` mide lo de siempre. Un ancho fijo desbordaba la barra en 375px.
   return (
-    <Select value={site.id} disabled={busy} onValueChange={(value) => void change(value)}>
-      <SelectTrigger className="h-9 w-40 gap-2 sm:w-56" aria-label={t('shell.site')}>
-        <Buildings size={16} aria-hidden="true" />
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {/* `/auth/me` es lo unico que lista los sites del usuario. */}
-        {(sites.length > 0 ? sites.map((membership) => membership.site) : [site]).map((entry) => (
-          <SelectItem key={entry.id} value={entry.id}>
-            {entry.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="min-w-0 flex-1 sm:w-56 sm:flex-none">
+      <Select value={site.id} disabled={busy} onValueChange={(value) => void change(value)}>
+        <SelectTrigger
+          className="h-9 w-full min-w-0 gap-2 [&>span]:min-w-0"
+          aria-label={t('shell.site')}
+        >
+          <Buildings size={16} aria-hidden="true" className="shrink-0" />
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {/* `/auth/me` es lo unico que lista los sites del usuario. */}
+          {(sites.length > 0 ? sites.map((membership) => membership.site) : [site]).map((entry) => (
+            <SelectItem key={entry.id} value={entry.id}>
+              {entry.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   )
 }
 
@@ -157,10 +164,10 @@ function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2">
+        <Button variant="ghost" size="sm" className="gap-2 px-2 sm:px-3">
           <User size={16} aria-hidden="true" />
           <span className="hidden max-w-32 truncate sm:inline">{user.full_name}</span>
-          <CaretDown size={16} aria-hidden="true" />
+          <CaretDown size={16} aria-hidden="true" className="hidden sm:inline" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -217,13 +224,13 @@ export function AppShell() {
         >
           <SidebarSimple size={16} aria-hidden="true" />
         </Button>
-        <span className="font-bold tracking-tight">{t('app.name')}</span>
-        <div className="ml-auto flex items-center gap-2">
+        <span className="shrink-0 font-bold tracking-tight">{t('app.name')}</span>
+        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1 sm:gap-2">
           <SiteSwitcher />
           {/* El idioma se queda en el cliente: no hay endpoint con el que un
               usuario cambie su propio `locale` (`PATCH /users/{id}` es de
               `users:manage`, y `/auth/me` es solo de lectura). */}
-          <LanguageSelect />
+          <LanguageSelect compact />
           <ThemeSelect />
           <UserMenu />
         </div>

@@ -12,6 +12,7 @@ pasa a **Sustituido por ADR-NNN**.
 | [ADR-004](#adr-004-el-token-del-qr-es-independiente-del-guid) | Token de share independiente del GUID | Aceptado |
 | [ADR-005](#adr-005-facturación-desactivable-por-flag) | Facturación desactivable por flag | Aceptado |
 | [ADR-006](#adr-006-el-catálogo-deca-vive-en-datos-no-en-código) | Catálogo DECA en datos, no en código | Aceptado |
+| [ADR-007](#adr-007-el-barrido-de-retención-lo-dispara-un-proceso-scheduler-con-apscheduler) | El barrido de retención lo dispara un proceso `scheduler` con APScheduler | Aceptado |
 
 ---
 
@@ -200,3 +201,67 @@ duplica). `DecaValidator` se construye leyendo la tabla. Cada documento guarda e
   sabe con qué reglas se aceptó.
 - El frontend pinta el formulario desde la API. No hay lista de campos duplicada en TypeScript.
 - Mismo criterio para los demás catálogos: planes, tipos de almacenamiento, estados.
+
+---
+
+## ADR-007: El barrido de retención lo dispara un proceso `scheduler` con APScheduler
+
+**Estado:** Aceptado · 2026-09
+
+### Contexto
+
+Dramatiq ejecuta actores cuando alguien encola un mensaje; no tiene reloj. El actor
+`sweep_expired` existía y `RETENTION_SWEEP_HOUR_UTC` estaba en la configuración, pero nada
+lo llamaba: la política de retención era decorativa hasta que un operador lo lanzaba a mano
+(`docs/RUNBOOK.md` §4). Hacían falta dos cosas: algo que encole el barrido cada día a esa
+hora, y que dos barridos que se solapen (dos réplicas del reloj, una ejecución manual durante
+la programada, un worker reiniciado a mitad) no retiren el mismo lote dos veces.
+
+Opciones honestas:
+
+1. **periodiq** — extensión de Dramatiq: `@cron("0 2 * * *")` sobre el actor y un proceso
+   `periodiq app.tasks`. Mantenida (0.14, 2026), pero añade un middleware al broker que
+   corre en todos los workers, arrastra `pendulum` como dependencia, y la hora tendría que
+   convertirse en una cadena cron en tiempo de importación, porque el decorador no lee
+   configuración.
+2. **APScheduler 3.x** en un proceso `scheduler` propio — un `BlockingScheduler` con un
+   `CronTrigger(hour=settings.retention_sweep_hour_utc)` cuyo único trabajo es
+   `sweep_expired.send()`.
+3. Cron del sistema o un `CronJob` del orquestador llamando a `python -c "...send()"`. Deja
+   la programación fuera del repositorio y del compose: nadie la ve, nadie la prueba.
+
+### Decisión
+
+APScheduler 3.x (`apscheduler>=3.10,<4`) en `app/tasks/scheduler.py`, arrancado como servicio
+separado:
+
+```bash
+python -m app.tasks.scheduler          # sirve la programación
+python -m app.tasks.scheduler --once   # encola un barrido ahora y termina
+```
+
+El scheduler **no barre**: encola un mensaje al día y el worker hace el trabajo. La
+idempotencia frente al solape no depende del planificador sino del actor: `run_sweep` toma un
+arrendamiento en Redis (`SET NX EX` con token aleatorio y liberación por comparación,
+`app/tasks/locks.py`) a través del único cliente `app.cache.get_redis()`. Quien no lo consigue
+registra un salto y termina sin tocar la base de datos. El arrendamiento se libera después de
+la confirmación de la transacción, así que el siguiente barrido ve el estado ya confirmado.
+
+Por qué APScheduler y no periodiq: el planificador queda en cuarenta líneas que se leen de
+arriba abajo, registra con el mismo JSON que la API, no mete nada en los workers y no depende
+de la versión de Dramatiq. periodiq habría sido igual de válido; se descarta por huella, no
+por calidad. Si algún día hay más de un trabajo periódico y conviene declararlos junto al
+actor, este ADR se sustituye.
+
+### Consecuencias
+
+- Un servicio más en el compose (`scheduler`), **una sola réplica**. Una segunda réplica no
+  rompe nada — el arrendamiento la convierte en un salto registrado — pero es ruido.
+- `misfire_grace_time` de seis horas: si el scheduler estaba caído a la hora programada y
+  vuelve dentro de esa ventana, el barrido se dispara al arrancar. Más tarde, espera a la
+  noche siguiente; el runbook tiene el disparo manual.
+- La ejecución manual del runbook pasa a ser `python -m app.tasks.scheduler --once`, y es
+  segura aunque coincida con la programada.
+- `tests/test_retention_lock.py` demuestra con dos hilos y un Redis en memoria que el
+  segundo barrido no procesa nada mientras el primero está dentro del lote.
+

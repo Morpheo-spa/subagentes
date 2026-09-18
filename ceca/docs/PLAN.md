@@ -65,7 +65,10 @@ Leyenda: **Hecho** · **En curso** · **Pendiente**
 |------------|--------|------|
 | `docs/RUNBOOK.md` | Hecho | Copias, restauración, rotación de clave, retención, Stripe |
 | Despliegue en staging con TLS real | Pendiente | Traefik tiene el resolutor ACME comentado |
-| Barrido de retención programado | Pendiente | El actor existe; falta el planificador |
+| Barrido de retención programado | Hecho | Servicio `scheduler` (APScheduler, ADR-007) + arrendamiento en Redis contra solapes; `tests/test_retention_lock.py` |
+| `/health/live` y `/health/ready` | Hecho | Readiness real (Postgres, Redis, storage) con 1,5 s por comprobación y 503 sin detalles; `tests/test_health.py` |
+| Logs JSON con `request_id` y redacción | Hecho | `app/logging.py`, `LOG_LEVEL`, log de acceso sin query ni token del visor; `tests/test_logging.py` |
+| Webhook de Stripe deduplicado (E-20) | Hecho | Tabla `billing_events` (migración 0005), inserta antes de procesar; `tests/test_billing_webhook_dedup.py` |
 | Copia de seguridad automatizada y probada | Pendiente | El procedimiento está escrito; falta automatizarlo |
 
 ---

@@ -69,6 +69,26 @@ else
   skip "pytest" "not installed"
 fi
 
+# --- Against a real database, when one is configured -------------------------
+# The SQLite suite cannot see schema drift, and only a migrated database can.
+# CI sets DATABASE_URL to its Postgres service; locally, `make up` does.
+if [[ -n "${DATABASE_URL:-}" ]]; then
+  step "alembic check (no drift between models and migrations)" run_py alembic check
+else
+  skip "alembic check" "DATABASE_URL not set"
+fi
+
+# --- Against a running deployment, when one is reachable ---------------------
+# scripts/smoke.py drives the whole delivery-note life cycle through the API:
+# session and cookie rotation, DECA generation, the public viewer, uploads,
+# revisions, printing, permissions, the SSRF guard. CI starts an API for it;
+# locally, point SMOKE_BASE_URL at whatever you have running.
+if [[ -n "${SMOKE_BASE_URL:-}" ]]; then
+  step "smoke test against ${SMOKE_BASE_URL}" "$PY" "$ROOT/scripts/smoke.py" "$SMOKE_BASE_URL" "${SMOKE_ORIGIN:-$SMOKE_BASE_URL}"
+else
+  skip "smoke test" "SMOKE_BASE_URL not set"
+fi
+
 # --- Environment template ----------------------------------------------------
 # The template must be rejected: it is a local file full of placeholders. A green
 # result here would mean the validator has stopped validating.

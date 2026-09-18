@@ -124,6 +124,15 @@ services:
     env_file: .env
     expose:
       - "8000"
+    # Readiness, not liveness: /health/ready answers 503 until Postgres, Redis
+    # and the storage root all respond, so Traefik never routes to an instance
+    # that cannot serve. The runtime image has no curl; Python is always there.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -159,6 +168,28 @@ services:
       - ALL
     env_file: .env
     command: ["dramatiq", "app.tasks", "--processes", "2", "--threads", "4"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - traefik.enable=false
+
+  # Fires the nightly retention sweep. Dramatiq has no clock of its own, so
+  # without this process the retention policy is decorative. Exactly one
+  # replica: the sweep also takes a Redis lock, but a single scheduler is the
+  # simple, correct shape.
+  scheduler:
+    build:
+      context: ./backend
+      target: runtime
+    restart: unless-stopped
+    <<: *hardening
+    cap_drop:
+      - ALL
+    env_file: .env
+    command: ["python", "-m", "app.tasks.scheduler"]
     depends_on:
       postgres:
         condition: service_healthy

@@ -26,7 +26,7 @@ import logging
 import re
 import sys
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any, TextIO
@@ -82,20 +82,35 @@ SENSITIVE_MARKERS: tuple[str, ...] = (
     "private_key",
 )
 
-_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+#: ``key=value`` / ``key: value`` / ``"key": "value"``: the value goes, the
+#: quoting stays, so a JSON line stays a JSON line after redaction.
+_ASSIGNMENT = re.compile(
+    r"(?i)\b(password|passwd|secret|token|access_token|refresh_token|"
+    r"api_key|apikey|client_secret|authorization)\b"
+    r"((?:\\?[\"'])?\s*[=:]\s*)"
+    # A value quoted with escaped quotes (a JSON string inside a JSON string)
+    # ends at the next escaped quote; a plainly quoted one at the next quote.
+    r"(\\\"(?:[^\"\\]|\\[^\"])*\\\"|\"(?:[^\"\\]|\\.)*\"|'[^']*'|[^\s,;&\"'}\]\\]+)"
+)
+
+
+def _redact_assignment(match: re.Match[str]) -> str:
+    value = match.group(3)
+    if value.startswith('\\"'):
+        quote = '\\"'  # a JSON string inside a JSON string stays one
+    elif value[:1] in ('"', "'"):
+        quote = value[0]
+    else:
+        quote = ""
+    return f"{match.group(1)}{match.group(2)}{quote}{REDACTED}{quote}"
+
+
+_PATTERNS: tuple[tuple[re.Pattern[str], str | Callable[[re.Match[str]], str]], ...] = (
     # HTTP credentials in free text: "Authorization: Bearer eyJ..." / "Basic dXNl..."
     (re.compile(r"(?i)\b(bearer|basic|digest)\s+[A-Za-z0-9\-._~+/=]{4,}"), rf"\1 {REDACTED}"),
-    # A whole cookie header.
-    (re.compile(r"(?i)\b(cookie|set-cookie)\s*[:=]\s*[^\r\n]+"), rf"\1: {REDACTED}"),
-    # key=value / key: value pairs, quoted or not.
-    (
-        re.compile(
-            r"(?i)\b(password|passwd|secret|token|access_token|refresh_token|"
-            r"api_key|apikey|client_secret|authorization)\b\s*[=:]\s*"
-            r"(\"[^\"]*\"|'[^']*'|[^\s,;&]+)"
-        ),
-        rf"\1={REDACTED}",
-    ),
+    # A whole cookie header, stopping before anything that would break a JSON line.
+    (re.compile(r"(?i)\b(cookie|set-cookie)\s*[:=]\s*[^\r\n\"\\]+"), rf"\1: {REDACTED}"),
+    (_ASSIGNMENT, _redact_assignment),
     # JWTs, wherever they appear.
     (re.compile(r"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*"), REDACTED),
     # Stripe keys and webhook secrets.
