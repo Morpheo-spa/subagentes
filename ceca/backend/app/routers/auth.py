@@ -11,21 +11,26 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import select
 
 from app.cache import blacklist_token, reject_if_blacklisted
 from app.config import get_settings
+from app.cookies import (
+    REFRESH_COOKIE,
+    clear_refresh_cookie,
+    read_refresh_cookie,
+    require_same_origin,
+    set_refresh_cookie,
+)
 from app.deps import Db, TenantContext, get_current_context
 from app.errors import DomainError
 from app.models.tenancy import PERMISSIONS, Site, User, UserSite
 from app.routers import ClientIpHash
 from app.schemas.auth import (
     LoginRequest,
-    LogoutRequest,
     MembershipSummary,
     MeResponse,
-    RefreshRequest,
     SessionResponse,
     SiteSummary,
     SwitchSiteRequest,
@@ -91,7 +96,7 @@ def _permissions_of(user: User, membership: UserSite) -> set[str]:
     return set(PERMISSIONS) if user.is_superuser else membership.permissions()
 
 
-def _session(user: User, membership: UserSite, site: Site) -> SessionResponse:
+def _session(response: Response, user: User, membership: UserSite, site: Site) -> SessionResponse:
     permissions = _permissions_of(user, membership)
     claims: dict[str, Any] = {
         "user_id": user.id,
@@ -102,10 +107,10 @@ def _session(user: User, membership: UserSite, site: Site) -> SessionResponse:
         "is_superuser": user.is_superuser,
         "locale": user.locale,
     }
+    set_refresh_cookie(response, create_token(**claims, token_type=REFRESH))
     return SessionResponse(
         tokens=TokenPair(
             access_token=create_token(**claims, token_type=ACCESS),
-            refresh_token=create_token(**claims, token_type=REFRESH),
             expires_in=get_settings().access_token_minutes * 60,
         ),
         user=UserSummary.model_validate(user),
@@ -122,7 +127,9 @@ def _access_payload(request: Request) -> dict[str, Any]:
 
 
 @router.post("/login", response_model=SessionResponse)
-async def login(payload: LoginRequest, db: Db, ip_hash: ClientIpHash) -> SessionResponse:
+async def login(
+    payload: LoginRequest, response: Response, db: Db, ip_hash: ClientIpHash
+) -> SessionResponse:
     user = await _user_by_email(db, payload.email)
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise DomainError("INVALID_CREDENTIALS", status_code=401)
@@ -142,12 +149,19 @@ async def login(payload: LoginRequest, db: Db, ip_hash: ClientIpHash) -> Session
         payload={},
         ip_hash=ip_hash,
     )
-    return _session(user, membership, site)
+    return _session(response, user, membership, site)
 
 
 @router.post("/refresh", response_model=SessionResponse)
-async def refresh(payload: RefreshRequest, db: Db) -> SessionResponse:
-    claims = decode_token(payload.refresh_token, expected_type=REFRESH)
+async def refresh(request: Request, response: Response, db: Db) -> SessionResponse:
+    """Rotate the session. The refresh token is read from its HttpOnly cookie.
+
+    The browser attaches that cookie by itself, so this route is the one place
+    a forged cross-site POST could ride an existing session. SameSite blocks
+    that, and the origin check below refuses it a second time.
+    """
+    require_same_origin(request)
+    claims = decode_token(read_refresh_cookie(request), expected_type=REFRESH)
     await reject_if_blacklisted(claims)
 
     user = await _active_user(db, uuid.UUID(claims["sub"]))
@@ -158,20 +172,22 @@ async def refresh(payload: RefreshRequest, db: Db) -> SessionResponse:
         uuid.UUID(tenant_id) if tenant_id else None,
     )
     await blacklist_token(claims)
-    return _session(user, membership, site)
+    return _session(response, user, membership, site)
 
 
 @router.post("/logout", response_model=Acknowledgement)
 async def logout(
     request: Request,
-    payload: LogoutRequest,
+    response: Response,
     ctx: Annotated[TenantContext, Depends(get_current_context)],
     ip_hash: ClientIpHash,
     db: Db,
 ) -> Acknowledgement:
     await blacklist_token(_access_payload(request))
-    if payload.refresh_token:
-        await blacklist_token(decode_token(payload.refresh_token, expected_type=REFRESH))
+    cookie = request.cookies.get(REFRESH_COOKIE)
+    if cookie:
+        await blacklist_token(decode_token(cookie, expected_type=REFRESH))
+    clear_refresh_cookie(response)
     await audit_service.record(
         db,
         mm_id=ctx.mm_id,
@@ -189,6 +205,7 @@ async def logout(
 @router.post("/switch-site", response_model=SessionResponse)
 async def switch_site(
     request: Request,
+    response: Response,
     payload: SwitchSiteRequest,
     ctx: Annotated[TenantContext, Depends(get_current_context)],
     db: Db,
@@ -196,7 +213,11 @@ async def switch_site(
     user = await _active_user(db, ctx.user_id)
     membership, site = _pick_membership(user, await _memberships(db, user), payload.site_id)
     await blacklist_token(_access_payload(request))
-    return _session(user, membership, site)
+    # The old refresh token still names the old site, so it is replaced, not kept.
+    cookie = request.cookies.get(REFRESH_COOKIE)
+    if cookie:
+        await blacklist_token(decode_token(cookie, expected_type=REFRESH))
+    return _session(response, user, membership, site)
 
 
 @router.get("/me", response_model=MeResponse)

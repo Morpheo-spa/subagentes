@@ -48,9 +48,9 @@ from app.security import hash_password, new_share_token  # noqa: E402
 DEMO_PASSWORD = "estampa-demo-2026"  # noqa: S105  (local fixture, never a real secret)
 MM_SLUG = "demo-logistica"
 DEMO_USERS = (
-    ("viewer@demo.test", "Vera Visor", "viewer"),
-    ("operador@demo.test", "Olga Operaria", "operator"),
-    ("admin@demo.test", "Adrián Admin", "mm_admin"),
+    ("viewer@estampa-demo.com", "Vera Visor", "viewer"),
+    ("operador@estampa-demo.com", "Olga Operaria", "operator"),
+    ("admin@estampa-demo.com", "Adrián Admin", "mm_admin"),
 )
 DEMO_DOCUMENTS = (
     ("albaran-1001.pdf", DocumentOrigin.GENERATED, ComplianceStatus.COMPLIANT),

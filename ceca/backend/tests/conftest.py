@@ -142,7 +142,7 @@ def make_user(db: AsyncSession) -> Callable[..., Any]:
         mm: MM,
         site: Site,
         *,
-        email: str = "user@demo.test",
+        email: str = "user@estampa-demo.com",
         role: str = "operator",
         is_superuser: bool = False,
     ) -> User:

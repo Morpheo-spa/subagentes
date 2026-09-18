@@ -1,8 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
-import { FileArrowUp, Printer, SlidersHorizontal } from '@phosphor-icons/react'
+import { Printer, SlidersHorizontal } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useBlocker, useNavigate } from 'react-router-dom'
-import { EmptyState } from '@/components/common/empty-state'
 import { PageHeader } from '@/components/common/page-header'
 import {
   AlertDialog,
@@ -134,20 +133,18 @@ export default function UploadPage() {
 
       <UploadDropZone onFiles={batch.addFiles} maxBytes={batch.maxBytes} />
 
-      {/* MASTER §10 y upload.md: un solo anuncio con el recuento, no un toast por fichero. */}
-      <p aria-live="polite" role="status" className="text-sm text-muted-foreground">
+      {/* MASTER §10 y upload.md: un solo anuncio con el recuento, no un toast por
+          fichero. Solo para lectores de pantalla: en pantalla el recuento ya lo
+          da la barra inferior, y no se dice dos veces. */}
+      <p aria-live="polite" role="status" className="sr-only">
         {batch.counts.total > 0
           ? t('upload.readyCount', { ready: batch.counts.ready, total: batch.counts.total })
           : ''}
       </p>
 
-      {batch.items.length === 0 ? (
-        <EmptyState
-          icon={FileArrowUp}
-          title={t('upload.emptyTitle')}
-          description={t('upload.emptyBody')}
-        />
-      ) : (
+      {/* Sin estado vacio: la zona de drop ya dice que hacer. Un segundo bloque
+          repitiendo "arrastra tus PDFs" es ruido. */}
+      {batch.items.length > 0 ? (
         <Table>
           <TableHeader>
             <TableRow>
@@ -170,7 +167,7 @@ export default function UploadPage() {
             ))}
           </TableBody>
         </Table>
-      )}
+      ) : null}
 
       {/* Barra fija inferior (upload.md). */}
       {batch.items.length > 0 ? (

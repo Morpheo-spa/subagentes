@@ -15,16 +15,6 @@ class LoginRequest(Schema):
     password: str = Field(min_length=1, max_length=256)
 
 
-class RefreshRequest(Schema):
-    refresh_token: str = Field(min_length=1)
-
-
-class LogoutRequest(Schema):
-    """The refresh token is optional: the access token alone is enough to sign out."""
-
-    refresh_token: str | None = None
-
-
 class SwitchSiteRequest(Schema):
     """The one place a site id legitimately travels in a body: it is the target."""
 
@@ -32,8 +22,13 @@ class SwitchSiteRequest(Schema):
 
 
 class TokenPair(Schema):
+    """Only the access token is ever serialised.
+
+    The refresh token goes back as an HttpOnly cookie, so it never reaches
+    JavaScript and cannot be copied into browser storage.
+    """
+
     access_token: str
-    refresh_token: str
     #: The OAuth 2.0 scheme name the client must put in the Authorization header.
     token_type: Literal["bearer"] = "bearer"  # noqa: S105
     expires_in: int

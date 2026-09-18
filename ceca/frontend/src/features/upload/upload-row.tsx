@@ -15,14 +15,11 @@ import { isDuplicate, isPrintable, isScan, type BatchItem } from './use-upload-b
 
 export function UploadRow({
   item,
-  publicUrl,
   onRetry,
   onRemove,
   onPrint,
 }: {
   item: BatchItem
-  /** URL publica del documento, si el detalle ya la ha traido. */
-  publicUrl?: string | null
   onRetry: (id: string) => void
   onRemove: (id: string) => void
   onPrint: (item: BatchItem) => void

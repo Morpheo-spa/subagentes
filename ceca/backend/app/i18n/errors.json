@@ -232,6 +232,10 @@
     "TOKEN_REVOKED": {
       "es": "Tu sesión se ha cerrado. Vuelve a entrar.",
       "en": "Your session was closed. Please sign in again."
+    },
+    "CROSS_ORIGIN_REJECTED": {
+      "es": "Petición rechazada por venir de otro origen.",
+      "en": "Request rejected because it came from another origin."
     }
   }
 }

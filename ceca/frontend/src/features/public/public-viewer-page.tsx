@@ -21,7 +21,7 @@ export function DocumentUnavailable() {
   const { t } = useI18n()
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
-      <Prohibit size={48} aria-hidden="true" className="text-muted-foreground" />
+      <Prohibit size={32} aria-hidden="true" className="text-muted-foreground" />
       <h1 className="text-h2 font-semibold">{t('public.unavailableTitle')}</h1>
       <p className="text-base text-muted-foreground">{t('public.unavailableBody')}</p>
     </main>
@@ -78,11 +78,7 @@ export default function PublicViewerPage() {
       <main className="flex flex-1 flex-col gap-3 px-4 py-4">
         {/* Un escaneo nunca se presenta como DeCA valido, tampoco en carretera. */}
         <ComplianceBadge status={data.compliance_status} />
-        <PdfViewer
-          token={token ?? ''}
-          fileName={data.original_filename}
-          fileHref={data.file_url}
-        />
+        <PdfViewer token={token ?? ''} fileName={data.original_filename} />
       </main>
 
       <footer className="sticky bottom-0 flex flex-col items-center gap-2 border-t border-border bg-card px-4 py-3">
@@ -92,9 +88,11 @@ export default function PublicViewerPage() {
             {t('public.openOrDownload')}
           </a>
         </Button>
+        {/* Solo la fecha. "Revision 0" es ruido: la revision se nombra cuando
+            de verdad hay una cadena detras. */}
         <p className="text-sm text-muted-foreground">
-          {t('public.issuedOn', { date: formatDate(data.issued_at, locale) })} ·{' '}
-          {t('public.revisionN', { n: data.revision })}
+          {t('public.issuedOn', { date: formatDate(data.issued_at, locale) })}
+          {data.revision > 0 ? ` · ${t('public.revisionN', { n: data.revision })}` : ''}
         </p>
       </footer>
     </div>
