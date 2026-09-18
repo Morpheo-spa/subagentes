@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Annotated, Any
 
@@ -103,7 +103,7 @@ async def get_current_user(
     return user
 
 
-def require_permission(permission: str):
+def require_permission(permission: str) -> Callable[[TenantContext], Awaitable[TenantContext]]:
     """Router guard. The backend decides; the frontend only hides."""
 
     async def guard(
@@ -116,7 +116,9 @@ def require_permission(permission: str):
     return guard
 
 
-def scoped[ModelT](stmt: Select, ctx: TenantContext, model: type[ModelT]) -> Select:
+def scoped[RowT: tuple[Any, ...]](
+    stmt: Select[RowT], ctx: TenantContext, model: type[object]
+) -> Select[RowT]:
     """Apply the two tenant filters. The only sanctioned way to read tenant data.
 
     Raises at call time if the model is not tenant scoped, so a missing filter is
@@ -127,7 +129,7 @@ def scoped[ModelT](stmt: Select, ctx: TenantContext, model: type[ModelT]) -> Sel
     return stmt.where(model.mm_id == ctx.mm_id, model.site_id == ctx.site_id)
 
 
-def scoped_select[ModelT](model: type[ModelT], ctx: TenantContext) -> Select:
+def scoped_select[ModelT](model: type[ModelT], ctx: TenantContext) -> Select[tuple[ModelT]]:
     return scoped(select(model), ctx, model)
 
 

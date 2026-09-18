@@ -18,7 +18,8 @@ from app.db import SessionLocal
 from app.deps import TenantContext
 from app.services.audit import SYSTEM_ACTOR_ID
 
-broker = RedisBroker(url=str(get_settings().redis_url))
+# dramatiq ships py.typed but leaves RedisBroker.__init__ unannotated.
+broker = RedisBroker(url=str(get_settings().redis_url))  # type: ignore[no-untyped-call]
 dramatiq.set_broker(broker)
 
 

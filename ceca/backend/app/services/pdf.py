@@ -17,7 +17,7 @@ from uuid import UUID
 
 from pypdf import PdfReader, PdfWriter
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
+from reportlab.lib.units import mm as _mm
 from reportlab.lib.utils import ImageReader, simpleSplit
 from reportlab.pdfgen import canvas as pdfcanvas
 
@@ -63,7 +63,11 @@ _TEXT: dict[str, dict[str, str]] = {
     },
 }
 
-PAGE_WIDTH, PAGE_HEIGHT = A4
+#: reportlab carries no type information, so its unit and page-size constants
+#: arrive untyped. Pinning them once keeps every measurement below a real float.
+mm: float = _mm
+PAGE_WIDTH: float = A4[0]
+PAGE_HEIGHT: float = A4[1]
 MARGIN = 18 * mm
 QR_SIZE = 34 * mm
 LABEL_WIDTH = 62 * mm
@@ -98,12 +102,12 @@ def has_text_layer(data: bytes) -> bool:
 
 
 def render_deca_pdf(
-    deca: dict,
+    deca: dict[str, Any],
     *,
     qr_url: str,
     document_id: UUID,
     site_name: str,
-    superseded: dict | None = None,
+    superseded: dict[str, Any] | None = None,
     change_reason: str | None = None,
     language: str = "es",
 ) -> bytes:
@@ -170,7 +174,7 @@ def _catalogue() -> list[dict[str, Any]]:
 def _label_for(code: str, language: str) -> str:
     for field in _catalogue():
         if field["code"] == code:
-            return field["label_en" if language == "en" else "label_es"]
+            return str(field["label_en" if language == "en" else "label_es"])
     return code
 
 
@@ -179,7 +183,7 @@ def _say(key: str, language: str) -> str:
     return entry.get(language) or entry["es"]
 
 
-def _ordered_items(values: dict, language: str) -> list[tuple[str, str]]:
+def _ordered_items(values: dict[str, Any], language: str) -> list[tuple[str, str]]:
     known = [field["code"] for field in _catalogue()]
     codes = [code for code in known if values.get(code) not in (None, "")]
     codes += [code for code in values if code not in known and values[code] not in (None, "")]
@@ -230,7 +234,9 @@ def _draw_header(
     return cursor - 8 * mm
 
 
-def _draw_fields(pdf: pdfcanvas.Canvas, values: dict, cursor: float, language: str) -> float:
+def _draw_fields(
+    pdf: pdfcanvas.Canvas, values: dict[str, Any], cursor: float, language: str
+) -> float:
     for label, value in _ordered_items(values, language):
         cursor = _row(pdf, label, value, cursor)
         cursor = _page_break(pdf, cursor, language)
@@ -239,7 +245,7 @@ def _draw_fields(pdf: pdfcanvas.Canvas, values: dict, cursor: float, language: s
 
 def _draw_superseded(
     pdf: pdfcanvas.Canvas,
-    superseded: dict,
+    superseded: dict[str, Any],
     change_reason: str | None,
     cursor: float,
     language: str,

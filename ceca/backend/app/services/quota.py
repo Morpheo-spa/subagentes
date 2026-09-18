@@ -42,7 +42,7 @@ def owner_mm_id(owner: Owner) -> UUID:
     return owner.mm_id if isinstance(owner, TenantContext) else owner
 
 
-async def limits_for(db: AsyncSession, owner: Owner) -> dict:
+async def limits_for(db: AsyncSession, owner: Owner) -> dict[str, int]:
     """The plan's limits with the subscription's overrides applied on top."""
     if not get_settings().billing_enabled:
         return dict(DEFAULT_LIMITS)

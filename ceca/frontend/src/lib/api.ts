@@ -4,13 +4,26 @@
  * Reglas (`.claude/rules/frontend.md`):
  *  - `fetch`, nunca axios.
  *  - El access token vive SOLO en memoria: lo aporta `auth.tsx` por inyeccion.
- *  - Los errores de la API son `{detail: {code, message, fields?}}` y se convierten
- *    en `ApiError`, que expone `.code` (para log) y `.message` (para pintar).
+ *  - Los errores de la API son `{detail: {code, message, params?}}` (la unica
+ *    forma que permite `app/errors.py:error_detail`) y se convierten en
+ *    `ApiError`, que expone `.code` (para log) y `.message` (para pintar).
  *  - Un 401 dispara UN solo refresh; si tampoco vale, se cierra sesion.
+ *
+ * Las rutas no se escriben aqui ni en los modulos: se piden a `routes.ts`, que
+ * es lo unico que el contrato del backend tiene que seguir. Por eso `request`
+ * acepta un `ApiRoute` y no una cadena: una ruta a mano no compila.
  */
+import type { ApiRoute, RouteBase } from './routes'
 import type { Locale } from './types'
 
 export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+/** El visor publico cuelga de la raiz, no de `/api/v1`. */
+export const ROOT_BASE_URL = ''
+
+const BASES: Record<RouteBase, () => string> = {
+  api: () => API_BASE_URL,
+  root: () => ROOT_BASE_URL,
+}
 
 export const ERROR_CODE_NETWORK = 'NETWORK_ERROR'
 export const ERROR_CODE_UNKNOWN = 'UNKNOWN_ERROR'
@@ -19,19 +32,15 @@ export const ERROR_CODE_UNAUTHORIZED = 'UNAUTHORIZED'
 export class ApiError extends Error {
   readonly code: string
   readonly status: number
-  readonly fields: Record<string, string> | undefined
+  /** `detail.params` del backend. Para interpolar, nunca para traducir el code. */
+  readonly params: Record<string, unknown>
 
-  constructor(
-    code: string,
-    message: string,
-    status: number,
-    fields?: Record<string, string> | undefined,
-  ) {
+  constructor(code: string, message: string, status: number, params: Record<string, unknown> = {}) {
     super(message)
     this.name = 'ApiError'
     this.code = code
     this.status = status
-    this.fields = fields
+    this.params = params
   }
 }
 
@@ -44,7 +53,7 @@ export function isApiError(value: unknown): value is ApiError {
 export interface AuthBridge {
   /** Access token en memoria, o null si no hay sesion. */
   getToken: () => string | null
-  /** Debe pedir un access token nuevo con la cookie httpOnly de refresh. */
+  /** Debe pedir un access token nuevo. */
   refresh: () => Promise<string | null>
   /** Se llama cuando el refresh tampoco vale. */
   onAuthFailure: () => void
@@ -56,6 +65,7 @@ let refreshInFlight: Promise<string | null> | null = null
 
 export function setAuthBridge(bridge: AuthBridge | null): void {
   authBridge = bridge
+  refreshInFlight = null
 }
 
 export function setApiLocale(locale: Locale): void {
@@ -81,8 +91,8 @@ function refreshOnce(): Promise<string | null> {
 
 export type QueryValue = string | number | boolean | null | undefined
 
-export function buildUrl(path: string, query?: Record<string, QueryValue>): string {
-  const base = path.startsWith('http') ? path : `${API_BASE_URL}${path}`
+export function buildUrl(route: ApiRoute, query?: Record<string, QueryValue>): string {
+  const base = `${BASES[route.base]()}${route.path}`
   if (!query) return base
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(query)) {
@@ -95,7 +105,6 @@ export function buildUrl(path: string, query?: Record<string, QueryValue>): stri
 
 export function buildHeaders(extra?: HeadersInit, token?: string | null): Headers {
   const headers = new Headers(extra)
-  headers.set('Accept', 'application/json')
   headers.set('Accept-Language', currentLocale)
   if (token) headers.set('Authorization', `Bearer ${token}`)
   return headers
@@ -105,7 +114,7 @@ export function buildHeaders(extra?: HeadersInit, token?: string | null): Header
 export async function toApiError(response: Response): Promise<ApiError> {
   let code = ERROR_CODE_UNKNOWN
   let message = response.statusText || `HTTP ${response.status}`
-  let fields: Record<string, string> | undefined
+  let params: Record<string, unknown> = {}
 
   try {
     const payload: unknown = await response.json()
@@ -113,23 +122,11 @@ export async function toApiError(response: Response): Promise<ApiError> {
     if (typeof detail === 'string') {
       message = detail
     } else if (detail && typeof detail === 'object') {
-      const d = detail as { code?: unknown; message?: unknown; fields?: unknown }
+      const d = detail as { code?: unknown; message?: unknown; params?: unknown }
       if (typeof d.code === 'string') code = d.code
       if (typeof d.message === 'string') message = d.message
-      if (Array.isArray(d.fields)) {
-        // Formato del validador DeCA: [{field, code, message}]
-        fields = {}
-        for (const entry of d.fields) {
-          const e = entry as { field?: unknown; message?: unknown }
-          if (typeof e?.field === 'string' && typeof e?.message === 'string') {
-            fields[e.field] = e.message
-          }
-        }
-      } else if (d.fields && typeof d.fields === 'object') {
-        fields = {}
-        for (const [key, value] of Object.entries(d.fields as Record<string, unknown>)) {
-          fields[key] = String(value)
-        }
+      if (d.params && typeof d.params === 'object') {
+        params = d.params as Record<string, unknown>
       }
     }
   } catch {
@@ -137,42 +134,46 @@ export async function toApiError(response: Response): Promise<ApiError> {
   }
 
   if (code === ERROR_CODE_UNKNOWN && response.status === 401) code = ERROR_CODE_UNAUTHORIZED
-  return new ApiError(code, message, response.status, fields)
+  return new ApiError(code, message, response.status, params)
 }
 
 /* ---- Peticiones ------------------------------------------------------ */
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   query?: Record<string, QueryValue>
   signal?: AbortSignal
   headers?: HeadersInit
-  /** No intentar refresh (login, refresh, logout, visor publico). */
+  /** No intentar refresh (login, refresh y el visor publico). */
   skipAuth?: boolean
+  /** `blob` para binarios servidos por la API (QR, PDF, folio de etiquetas). */
+  accept?: 'json' | 'blob'
 }
 
-async function rawRequest(path: string, options: RequestOptions, token: string | null) {
-  const { method = 'GET', body, query, signal, headers } = options
-  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
-  const requestHeaders = buildHeaders(headers, options.skipAuth ? null : token)
-  if (body !== undefined && !isFormData) requestHeaders.set('Content-Type', 'application/json')
+function accepts(options: RequestOptions): string {
+  return options.accept === 'blob' ? '*/*' : 'application/json'
+}
 
-  return fetch(buildUrl(path, query), {
-    method,
+async function rawRequest(route: ApiRoute, options: RequestOptions, token: string | null) {
+  const { body, query, signal, headers } = options
+  const requestHeaders = buildHeaders(headers, options.skipAuth ? null : token)
+  requestHeaders.set('Accept', accepts(options))
+  if (body !== undefined) requestHeaders.set('Content-Type', 'application/json')
+
+  return fetch(buildUrl(route, query), {
+    method: route.method,
     headers: requestHeaders,
-    credentials: 'include', // cookie httpOnly del refresh token
     signal: signal ?? null,
-    body: body === undefined ? null : isFormData ? (body as FormData) : JSON.stringify(body),
+    body: body === undefined ? null : JSON.stringify(body),
   })
 }
 
-export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function send(route: ApiRoute, options: RequestOptions): Promise<Response> {
   const token = authBridge?.getToken() ?? null
   let response: Response
 
   try {
-    response = await rawRequest(path, options, token)
+    response = await rawRequest(route, options, token)
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error
     throw new ApiError(ERROR_CODE_NETWORK, String((error as Error)?.message ?? error), 0)
@@ -186,7 +187,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       throw await toApiError(response)
     }
     try {
-      response = await rawRequest(path, options, fresh)
+      response = await rawRequest(route, options, fresh)
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') throw error
       throw new ApiError(ERROR_CODE_NETWORK, String((error as Error)?.message ?? error), 0)
@@ -198,6 +199,12 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   if (!response.ok) throw await toApiError(response)
+  return response
+}
+
+/** Llama a una ruta del registro. El verbo lo pone la ruta, no quien la usa. */
+export async function request<T>(route: ApiRoute, options: RequestOptions = {}): Promise<T> {
+  const response = await send(route, options)
   if (response.status === 204) return undefined as T
 
   const contentType = response.headers.get('Content-Type') ?? ''
@@ -205,28 +212,27 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   return (await response.json()) as T
 }
 
-export const api = {
-  get: <T>(path: string, options?: Omit<RequestOptions, 'method' | 'body'>) =>
-    request<T>(path, { ...options, method: 'GET' }),
-  post: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) =>
-    request<T>(path, { ...options, method: 'POST', body }),
-  put: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) =>
-    request<T>(path, { ...options, method: 'PUT', body }),
-  patch: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>) =>
-    request<T>(path, { ...options, method: 'PATCH', body }),
-  delete: <T>(path: string, options?: Omit<RequestOptions, 'method' | 'body'>) =>
-    request<T>(path, { ...options, method: 'DELETE' }),
+/**
+ * Binario servido por la API. Hace falta porque el QR y el PDF van detras del
+ * bearer: un `<img src>` no lleva cabeceras, asi que se descarga y se pinta
+ * desde un object URL.
+ */
+export async function requestBlob(route: ApiRoute, options: RequestOptions = {}): Promise<Blob> {
+  const response = await send(route, { ...options, accept: 'blob' })
+  return response.blob()
 }
 
 /* ---- Subida con progreso --------------------------------------------- */
 
-export interface UploadOptions<T> {
-  path: string
-  file: File
-  fields?: Record<string, string>
+export interface UploadOptions {
+  route: ApiRoute
+  /** `POST /documents/` acepta varios ficheros en el campo `files`. */
+  files: File[]
+  /** Metadatos DeCA comunes a la tanda: viajan como JSON en un campo `deca`. */
+  deca?: Record<string, unknown>
+  retentionPolicyId?: string | null
   onProgress?: (percent: number) => void
   signal?: AbortSignal
-  parse?: (payload: unknown) => T
 }
 
 /**
@@ -234,16 +240,16 @@ export interface UploadOptions<T> {
  * unica funcion usa XHR. Sigue sin haber axios: mismo parseo de error, mismo
  * token en memoria y el mismo reintento unico tras refrescar.
  */
-export function upload<T>(options: UploadOptions<T>): Promise<T> {
+export function upload<T>(options: UploadOptions): Promise<T> {
   const attempt = (token: string | null, allowRefresh: boolean): Promise<T> =>
     new Promise<T>((resolve, reject) => {
       const xhr = new XMLHttpRequest()
       const form = new FormData()
-      form.append('file', options.file, options.file.name)
-      for (const [key, value] of Object.entries(options.fields ?? {})) form.append(key, value)
+      for (const file of options.files) form.append('files', file, file.name)
+      if (options.deca) form.append('deca', JSON.stringify(options.deca))
+      if (options.retentionPolicyId) form.append('retention_policy_id', options.retentionPolicyId)
 
-      xhr.open('POST', buildUrl(options.path), true)
-      xhr.withCredentials = true
+      xhr.open(options.route.method, buildUrl(options.route), true)
       xhr.setRequestHeader('Accept', 'application/json')
       xhr.setRequestHeader('Accept-Language', currentLocale)
       if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
@@ -255,7 +261,6 @@ export function upload<T>(options: UploadOptions<T>): Promise<T> {
 
       const abort = () => xhr.abort()
       options.signal?.addEventListener('abort', abort, { once: true })
-
       const cleanup = () => options.signal?.removeEventListener('abort', abort)
 
       xhr.onerror = () => {
@@ -277,7 +282,7 @@ export function upload<T>(options: UploadOptions<T>): Promise<T> {
 
         if (xhr.status >= 200 && xhr.status < 300) {
           options.onProgress?.(100)
-          resolve(options.parse ? options.parse(payload) : (payload as T))
+          resolve(payload as T)
           return
         }
 
@@ -308,18 +313,12 @@ export function upload<T>(options: UploadOptions<T>): Promise<T> {
 export function errorFromPayload(payload: unknown, status: number): ApiError {
   const detail = (payload as { detail?: unknown } | null)?.detail
   if (detail && typeof detail === 'object') {
-    const d = detail as { code?: unknown; message?: unknown; fields?: unknown }
-    const fields =
-      d.fields && typeof d.fields === 'object' && !Array.isArray(d.fields)
-        ? Object.fromEntries(
-            Object.entries(d.fields as Record<string, unknown>).map(([k, v]) => [k, String(v)]),
-          )
-        : undefined
+    const d = detail as { code?: unknown; message?: unknown; params?: unknown }
     return new ApiError(
       typeof d.code === 'string' ? d.code : ERROR_CODE_UNKNOWN,
       typeof d.message === 'string' ? d.message : `HTTP ${status}`,
       status,
-      fields,
+      d.params && typeof d.params === 'object' ? (d.params as Record<string, unknown>) : {},
     )
   }
   return new ApiError(

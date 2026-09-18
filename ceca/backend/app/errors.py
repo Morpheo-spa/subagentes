@@ -19,7 +19,8 @@ _FALLBACK_LANGUAGE = "es"
 @lru_cache
 def _catalog() -> dict[str, dict[str, str]]:
     with _ERRORS_PATH.open(encoding="utf-8") as handle:
-        return json.load(handle)["byCode"]
+        catalogue: dict[str, dict[str, dict[str, str]]] = json.load(handle)
+    return catalogue["byCode"]
 
 
 class DomainError(Exception):

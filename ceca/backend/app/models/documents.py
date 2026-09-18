@@ -5,6 +5,7 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -93,7 +94,7 @@ class Document(Base, TenantScoped, TimestampMixin, OptimisticLock):
     failure_code: Mapped[str | None] = mapped_column(String(64))
 
     #: DECA metadata, validated against the field catalogue in force at upload time.
-    deca: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    deca: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     deca_status: Mapped[DecaStatus] = mapped_column(
         String(16), nullable=False, default=DecaStatus.INCOMPLETE
     )

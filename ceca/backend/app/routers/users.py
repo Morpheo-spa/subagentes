@@ -31,7 +31,7 @@ ReadCtx = Annotated[TenantContext, Depends(require_permission("users:read"))]
 ManageCtx = Annotated[TenantContext, Depends(require_permission("users:manage"))]
 
 
-def _company_users(ctx: TenantContext) -> Select:
+def _company_users(ctx: TenantContext) -> Select[tuple[User]]:
     return select(User).where(User.mm_id == ctx.mm_id)
 
 

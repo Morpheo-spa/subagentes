@@ -323,7 +323,9 @@ async def render_labels_html(
     return render_labels(job, labels, template, language=language)
 
 
-async def labels_for_job(db: AsyncSession, ctx: TenantContext, job: PrintJob) -> list[dict]:
+async def labels_for_job(
+    db: AsyncSession, ctx: TenantContext, job: PrintJob
+) -> list[dict[str, str]]:
     """Expand a job into one dict per physical label, ready for rendering."""
     stmt = (
         select(PrintJobItem)
@@ -336,7 +338,7 @@ async def labels_for_job(db: AsyncSession, ctx: TenantContext, job: PrintJob) ->
         for document in await _documents_of(db, ctx, [item.document_id for item in items])
     }
 
-    labels: list[dict] = []
+    labels: list[dict[str, str]] = []
     for item in items:
         document = documents[item.document_id]
         share = await active_share_token(db, document.id)
@@ -364,7 +366,7 @@ def template_for(template_code: str) -> LabelTemplate:
 
 def render_labels(
     job: PrintJob,
-    labels: list[dict],
+    labels: list[dict[str, str]],
     template: LabelTemplate,
     *,
     language: str = "es",
@@ -455,7 +457,7 @@ def _reject_bad_start(template: LabelTemplate, start_position: int) -> None:
         )
 
 
-def _label_cell(label: dict) -> str:
+def _label_cell(label: dict[str, str]) -> str:
     qr = qr_svg(label["qr_url"]) if label.get("qr_url") else ""
     return (
         '<div class="label">'

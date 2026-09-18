@@ -22,8 +22,15 @@ dist/
 .vite/
 *.tsbuildinfo
 
-# Local data
-storage/
+# Local data written at runtime.
+# Anchored with a leading slash on purpose: a bare "storage/" also matched
+# backend/app/services/storage/ and silently kept the whole storage adapter
+# package out of the repository, so a clean clone could not start the backend.
+/storage/
+/var/
+/uploads/
+backend/storage/
+backend/var/
 *.sqlite3
 *.db
 

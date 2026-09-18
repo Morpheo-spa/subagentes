@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +23,7 @@ async def record(
     action: str,
     object_type: str,
     object_id: UUID | None = None,
-    payload: dict | None = None,
+    payload: dict[str, Any] | None = None,
     ip_hash: str | None = None,
 ) -> None:
     """Append one entry. Never updates, never deletes, never raises on content."""

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import enum
 import uuid
+from typing import Any
 
 from sqlalchemy import Boolean, LargeBinary, String
 from sqlalchemy.dialects.postgresql import JSONB
@@ -30,7 +31,7 @@ class StorageBackend(Base, TenantScoped, TimestampMixin, OptimisticLock):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     kind: Mapped[StorageKind] = mapped_column(String(32), nullable=False)
     #: Non-secret settings: bucket, region, base path, host, port.
-    config: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    config: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     #: Fernet-encrypted secrets. Never serialised by any schema, not even masked.
     config_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

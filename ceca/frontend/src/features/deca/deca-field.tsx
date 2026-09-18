@@ -1,57 +1,70 @@
 import { FormDescription, FormField, FormLabel, useFormControlProps } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useI18n } from '@/lib/i18n'
-import type { DecaFieldDefinition } from '@/lib/types'
+import type { DecaFieldRead, DecaFieldType } from '@/lib/types'
 
-const INPUT_TYPE: Record<string, string> = {
-  text: 'text',
+/** `data_type` del catalogo -> `type` del input. Lo que no este, va como texto. */
+const INPUT_TYPE: Partial<Record<DecaFieldType, string>> = {
+  string: 'text',
   number: 'number',
+  decimal: 'number',
   date: 'date',
-  nif: 'text',
-  plate: 'text',
+  datetime: 'datetime-local',
 }
 
 function Control({
-  definition,
+  field,
   value,
   onChange,
   onBlur,
   label,
 }: {
-  definition: DecaFieldDefinition
+  field: DecaFieldRead
   value: string
   onChange: (value: string) => void
   onBlur: () => void
   label: string
 }) {
   const control = useFormControlProps()
-  const { pick } = useI18n()
 
-  if (definition.type === 'textarea') {
+  if (field.data_type === 'text') {
     return (
       <Textarea
         {...control}
-        data-field={definition.code}
+        data-field={field.code}
         value={value}
-        maxLength={definition.max_length ?? undefined}
+        maxLength={field.max_length ?? undefined}
         onChange={(event) => onChange(event.target.value)}
         onBlur={onBlur}
       />
     )
   }
 
-  if (definition.type === 'select') {
+  if (field.data_type === 'enum') {
     return (
-      <Select value={value} onValueChange={(next) => { onChange(next); onBlur() }}>
-        <SelectTrigger {...control} data-field={definition.code} aria-label={label}>
+      <Select
+        value={value}
+        onValueChange={(next) => {
+          onChange(next)
+          onBlur()
+        }}
+      >
+        <SelectTrigger {...control} data-field={field.code} aria-label={label}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {(definition.options ?? []).map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {pick(option, 'label')}
+          {/* `choices` es una lista de codigos sin etiqueta: se pintan tal cual. */}
+          {field.choices.map((choice) => (
+            <SelectItem key={choice} value={choice}>
+              {choice}
             </SelectItem>
           ))}
         </SelectContent>
@@ -59,15 +72,16 @@ function Control({
     )
   }
 
+  const numeric = field.data_type === 'number' || field.data_type === 'decimal'
   return (
     <Input
       {...control}
-      data-field={definition.code}
-      type={INPUT_TYPE[definition.type] ?? 'text'}
+      data-field={field.code}
+      type={INPUT_TYPE[field.data_type] ?? 'text'}
       value={value}
-      inputMode={definition.type === 'number' ? 'decimal' : undefined}
-      maxLength={definition.max_length ?? undefined}
-      step={definition.type === 'number' ? 'any' : undefined}
+      inputMode={numeric ? 'decimal' : undefined}
+      maxLength={field.max_length ?? undefined}
+      step={numeric ? 'any' : undefined}
       onChange={(event) => onChange(event.target.value)}
       onBlur={onBlur}
     />
@@ -76,40 +90,32 @@ function Control({
 
 /** Un campo del catalogo DeCA. El catalogo manda; aqui no hay `if` por codigo. */
 export function DecaField({
-  definition,
+  field,
   value,
   error,
   onChange,
   onBlur,
 }: {
-  definition: DecaFieldDefinition
+  field: DecaFieldRead
   value: string
   error: string | null
   onChange: (value: string) => void
   onBlur: () => void
 }) {
   const { t, pick } = useI18n()
-  const label = pick(definition, 'label')
-  const help = pick(definition, 'help')
+  const label = pick(field, 'label')
+  const help = pick(field, 'help')
 
   return (
-    <FormField error={error} className={definition.type === 'textarea' ? 'md:col-span-2' : undefined}>
-      <FormLabel required={definition.required} requiredLabel={t('common.required')}>
+    <FormField error={error} className={field.data_type === 'text' ? 'md:col-span-2' : undefined}>
+      <FormLabel required={field.is_required} requiredLabel={t('common.required')}>
         {label}
       </FormLabel>
-      <Control
-        definition={definition}
-        value={value}
-        onChange={onChange}
-        onBlur={onBlur}
-        label={label}
-      />
-      {help || definition.legal_ref ? (
+      <Control field={field} value={value} onChange={onChange} onBlur={onBlur} label={label} />
+      {help || field.legal_reference ? (
         <FormDescription>
           {help}
-          {definition.legal_ref
-            ? ` ${t('deca.legalRef', { ref: definition.legal_ref })}`
-            : ''}
+          {field.legal_reference ? ` ${t('deca.legalRef', { ref: field.legal_reference })}` : ''}
         </FormDescription>
       ) : null}
     </FormField>

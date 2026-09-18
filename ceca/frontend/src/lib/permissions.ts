@@ -1,8 +1,10 @@
 /**
- * Permisos `<recurso>:<accion>`. El backend vuelve a comprobarlos siempre
- * (`require_permission`): esto es solo para no ensenar lo que no se puede usar.
+ * Permisos `<recurso>:<accion>`, copiados de `app/models/tenancy.py:PERMISSIONS`.
+ * El backend vuelve a comprobarlos siempre (`require_permission`): esto es solo
+ * para no ensenar lo que no se puede usar.
+ *
+ * Los nombres son identificadores y no se traducen (`.claude/rules/i18n.md`).
  */
-import type { CurrentUser } from './types'
 
 export const PERMISSIONS = {
   documentsRead: 'documents:read',
@@ -10,26 +12,40 @@ export const PERMISSIONS = {
   documentsUpdate: 'documents:update',
   documentsWithdraw: 'documents:withdraw',
   documentsExport: 'documents:export',
-  decaRead: 'deca:read',
-  decaWrite: 'deca:write',
+  shareRevoke: 'share:revoke',
   printingRead: 'printing:read',
-  printingCreate: 'printing:create',
+  printingQueue: 'printing:queue',
+  printingPrint: 'printing:print',
+  storageRead: 'storage:read',
+  storageManage: 'storage:manage',
+  retentionRead: 'retention:read',
+  retentionManage: 'retention:manage',
   billingRead: 'billing:read',
   billingManage: 'billing:manage',
-  adminSites: 'admin:sites',
-  adminUsers: 'admin:users',
-  adminStorage: 'admin:storage',
-  adminRetention: 'admin:retention',
+  usersRead: 'users:read',
+  usersManage: 'users:manage',
+  sitesRead: 'sites:read',
+  sitesManage: 'sites:manage',
+  auditRead: 'audit:read',
 } as const
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]
 
-export function hasPermission(user: CurrentUser | null, permission: Permission): boolean {
-  if (!user) return false
-  if (user.is_superuser) return true
-  return user.permissions.includes(permission)
+/** Lo que el backend concede en la sesion: usuario + permisos del site activo. */
+export interface PermissionHolder {
+  is_superuser: boolean
+  permissions: string[]
 }
 
-export function hasAnyPermission(user: CurrentUser | null, permissions: Permission[]): boolean {
-  return permissions.some((permission) => hasPermission(user, permission))
+export function hasPermission(holder: PermissionHolder | null, permission: Permission): boolean {
+  if (!holder) return false
+  if (holder.is_superuser) return true
+  return holder.permissions.includes(permission)
+}
+
+export function hasAnyPermission(
+  holder: PermissionHolder | null,
+  permissions: Permission[],
+): boolean {
+  return permissions.some((permission) => hasPermission(holder, permission))
 }

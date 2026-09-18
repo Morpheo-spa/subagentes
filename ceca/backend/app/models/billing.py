@@ -43,7 +43,7 @@ class Plan(Base, TimestampMixin):
     interval: Mapped[str] = mapped_column(String(16), nullable=False, default="month")
     #: {"documents_per_month": int, "storage_gb": int, "users": int, "sites": int}
     #: A value of -1 means unlimited.
-    limits: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    limits: Mapped[dict[str, int]] = mapped_column(JSONB, default=dict, nullable=False)
     stripe_price_id: Mapped[str | None] = mapped_column(String(120))
     is_public: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -74,7 +74,7 @@ class Subscription(Base, TimestampMixin, OptimisticLock):
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     #: Per-tenant overrides that win over the plan's limits.
-    limit_overrides: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    limit_overrides: Mapped[dict[str, int]] = mapped_column(JSONB, default=dict, nullable=False)
 
 
 class UsageCounter(Base, TimestampMixin):

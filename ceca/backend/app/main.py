@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -37,7 +37,9 @@ settings = get_settings()
 class RequestIdMiddleware(BaseHTTPMiddleware):
     """Tags every request so a user-visible error can be traced in the logs."""
 
-    async def dispatch(self, request: Request, call_next):  # noqa: ANN001, ANN201
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
         request.state.request_id = request_id
         response = await call_next(request)
@@ -59,7 +61,9 @@ PUBLIC_VIEWER_HEADERS = {
 class PublicViewerHeadersMiddleware(BaseHTTPMiddleware):
     """Keeps the QR viewer out of search engines and caches, including on 404."""
 
-    async def dispatch(self, request: Request, call_next):  # noqa: ANN001, ANN201
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         response = await call_next(request)
         if request.url.path.startswith(PUBLIC_VIEWER_PREFIX):
             response.headers.update(PUBLIC_VIEWER_HEADERS)

@@ -16,7 +16,7 @@ from datetime import UTC, date, datetime, time
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import ColumnElement, String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -75,7 +75,7 @@ class IngestWarning:
     """Something the user should know about a file that was archived anyway."""
 
     code: str
-    params: dict = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +156,7 @@ async def ingest_upload(
     upload: UploadLike | None = None,
     filename: str,
     data: bytes | None = None,
-    deca: dict | None = None,
+    deca: dict[str, Any] | None = None,
     retention_policy_id: UUID | None = None,
     actor_user_id: UUID | None = None,
     ip_hash: str | None = None,
@@ -250,7 +250,7 @@ async def create_from_deca(
     db: AsyncSession,
     ctx: TenantContext,
     *,
-    deca: dict,
+    deca: dict[str, Any],
     filename: str | None = None,
     site_name: str | None = None,
     retention_policy_id: UUID | None = None,
@@ -276,7 +276,7 @@ async def create_revision(
     document_id: UUID,
     *,
     change_reason: str,
-    deca: dict | None = None,
+    deca: dict[str, Any] | None = None,
     site_name: str | None = None,
     actor_user_id: UUID | None = None,
     ip_hash: str | None = None,
@@ -335,7 +335,7 @@ async def update_deca(
     ctx: TenantContext,
     document_id: UUID,
     *,
-    deca: dict,
+    deca: dict[str, Any],
     expected_version: int | None = None,
     actor_user_id: UUID | None = None,
     ip_hash: str | None = None,
@@ -608,7 +608,7 @@ async def _generate(
     db: AsyncSession,
     ctx: TenantContext,
     *,
-    deca: dict,
+    deca: dict[str, Any],
     filename: str | None,
     site_name: str | None,
     retention_policy_id: UUID | None,
@@ -806,8 +806,8 @@ async def _accesses_of(db: AsyncSession, document: Document) -> list[PublicAcces
     ]
 
 
-def _filter_conditions(filters: Any) -> list:
-    conditions = []
+def _filter_conditions(filters: Any) -> list[ColumnElement[bool]]:
+    conditions: list[ColumnElement[bool]] = []
     search = _filter(filters, "search")
     if search:
         pattern = f"%{search}%"
@@ -910,7 +910,7 @@ def _token_is_live(share: ShareToken) -> bool:
     return share.expires_at is None or share.expires_at > datetime.now(UTC)
 
 
-def _changed_values(previous: dict | None, current: dict) -> dict:
+def _changed_values(previous: dict[str, Any] | None, current: dict[str, Any]) -> dict[str, Any]:
     """The old value of every field this revision actually changes."""
     return {code: value for code, value in (previous or {}).items() if current.get(code) != value}
 
@@ -984,7 +984,7 @@ async def _log(
     ctx: TenantContext,
     document: Document,
     action: str,
-    payload: dict,
+    payload: dict[str, Any],
     *,
     actor_user_id: UUID | None = None,
     ip_hash: str | None = None,

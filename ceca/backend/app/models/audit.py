@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import JSONB
@@ -32,6 +33,6 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     object_type: Mapped[str] = mapped_column(String(48), nullable=False)
     object_id: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True))
-    payload: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     ip_hash: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

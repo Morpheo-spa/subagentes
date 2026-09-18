@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy import Select, and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -161,7 +161,7 @@ async def apply_due(db: AsyncSession, *, limit: int = 500) -> int:
     return processed
 
 
-def _due_statement(now: datetime, limit: int):
+def _due_statement(now: datetime, limit: int) -> Select[tuple[Document, RetentionPolicy]]:
     has_active_token = exists(
         select(ShareToken.id).where(
             ShareToken.document_id == Document.id, ShareToken.revoked_at.is_(None)

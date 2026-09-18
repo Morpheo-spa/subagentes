@@ -34,7 +34,7 @@ def harden(response: Response) -> None:
 router = APIRouter(prefix="/v", tags=["public"], dependencies=[Depends(harden)])
 
 
-async def _resolve(db: Db, token: str):  # noqa: ANN202 - service-owned shape
+async def _resolve(db: Db, token: str) -> documents_service.ShareResolution:
     """One answer for unknown, revoked and withdrawn. Never confirm existence."""
     resolution = await documents_service.resolve_share_token(db, token)
     if resolution is None or not resolution.document.is_available:

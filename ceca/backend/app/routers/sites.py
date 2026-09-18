@@ -22,7 +22,7 @@ ReadCtx = Annotated[TenantContext, Depends(require_permission("sites:read"))]
 ManageCtx = Annotated[TenantContext, Depends(require_permission("sites:manage"))]
 
 
-def _company_sites(ctx: TenantContext) -> Select:
+def _company_sites(ctx: TenantContext) -> Select[tuple[Site]]:
     """Sites are scoped by company: a site row cannot be scoped by itself."""
     return select(Site).where(Site.mm_id == ctx.mm_id)
 

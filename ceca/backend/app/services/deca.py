@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from datetime import date, datetime
@@ -46,7 +47,7 @@ class FieldError:
 
     field: str
     code: str
-    params: dict = dataclass_field(default_factory=dict)
+    params: dict[str, Any] = dataclass_field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,18 +99,18 @@ class DecaValidator:
                 return spec.label(language)
         return code
 
-    def validate(self, values: dict) -> list[FieldError]:
+    def validate(self, values: dict[str, Any]) -> list[FieldError]:
         errors: list[FieldError] = []
         for spec in self._specs:
             errors.extend(_validate_field(spec, values.get(spec.code)))
         errors.extend(self._validate_parties(values))
         return errors
 
-    def is_complete(self, values: dict) -> bool:
+    def is_complete(self, values: dict[str, Any]) -> bool:
         """True when every required field of the catalogue is present and valid."""
         return not self.validate(values)
 
-    def _validate_parties(self, values: dict) -> list[FieldError]:
+    def _validate_parties(self, values: dict[str, Any]) -> list[FieldError]:
         """Both parties must be told apart, so the same tax ID cannot cover both."""
         by_party: dict[str, str] = {}
         for prefix in PARTY_PREFIXES:
@@ -200,7 +201,7 @@ def _validate_field(spec: FieldSpec, raw: Any) -> list[FieldError]:
     return []
 
 
-def _label_params(spec: FieldSpec) -> dict:
+def _label_params(spec: FieldSpec) -> dict[str, str]:
     return {
         "label": spec.label_es,
         "label_es": spec.label_es,
@@ -213,7 +214,7 @@ def _is_blank(raw: Any) -> bool:
 
 
 def _matches_type(spec: FieldSpec, raw: Any) -> bool:
-    checks = {
+    checks: dict[DecaFieldType, Callable[[Any], bool]] = {
         DecaFieldType.NUMBER: _is_positive_number,
         DecaFieldType.DECIMAL: _is_positive_number,
         DecaFieldType.DATE: _is_date,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, MetaData, func
 from sqlalchemy.dialects.postgresql import (
@@ -62,9 +63,15 @@ class TenantScoped:
             PgUUID(as_uuid=True), ForeignKey("sites.id", ondelete="RESTRICT"), nullable=False
         )
 
+    if TYPE_CHECKING:
+        # Declared by the concrete table, not by the mixin. Annotating it here
+        # (type-checking only, so SQLAlchemy never sees it) lets __table_args__
+        # read it without the mixin pretending to own a table name.
+        __tablename__: str
+
     @declared_attr.directive
     @classmethod
-    def __table_args__(cls) -> tuple:  # noqa: D105
+    def __table_args__(cls) -> tuple[Index, ...]:  # noqa: D105
         return (Index(f"ix_{cls.__tablename__}_tenant", "mm_id", "site_id", "created_at"),)
 
 
@@ -75,5 +82,5 @@ class OptimisticLock:
 
     @declared_attr.directive
     @classmethod
-    def __mapper_args__(cls) -> dict:  # noqa: D105
+    def __mapper_args__(cls) -> dict[str, Any]:  # noqa: D105
         return {"version_id_col": cls.__dict__["version"]}
