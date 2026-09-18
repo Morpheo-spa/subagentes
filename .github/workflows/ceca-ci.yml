@@ -128,8 +128,9 @@ jobs:
 
       - name: Install the frontend
         working-directory: ceca/frontend
+        # No continue-on-error: the gate skips the frontend checks when
+        # node_modules is missing, so a failed install would pass unnoticed.
         run: npm ci --no-audit --no-fund
-        continue-on-error: true
 
       - name: Run the gate
         run: bash scripts/ci.sh

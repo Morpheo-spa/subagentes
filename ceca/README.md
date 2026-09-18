@@ -8,6 +8,9 @@ de retención.
 
 ---
 
+
+> **Antes de desplegar**, lee [`docs/GO-LIVE.md`](docs/GO-LIVE.md): dice qué se ha verificado ejecutándolo de verdad, qué solo por lectura, y los pasos del primer despliegue.
+
 ## Aviso DeCA: el PDF tiene que ser nativo
 
 > **Un escaneo o una foto de un albarán no es un DeCA válido.**
