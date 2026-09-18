@@ -1,0 +1,297 @@
+"""Stripe subscriptions. Dormant unless BILLING_ENABLED.
+
+Every entry point refuses with ``BILLING_DISABLED`` when billing is off, so an
+installation that does not sell anything never reaches the provider at all.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import get_settings
+from app.errors import DomainError, NotFoundError
+from app.models.billing import (
+    BillingProvider,
+    Plan,
+    Subscription,
+    SubscriptionStatus,
+)
+
+PROVIDER_STATUS: dict[str, SubscriptionStatus] = {
+    "trialing": SubscriptionStatus.TRIALING,
+    "active": SubscriptionStatus.ACTIVE,
+    "past_due": SubscriptionStatus.PAST_DUE,
+    "unpaid": SubscriptionStatus.PAST_DUE,
+    "incomplete": SubscriptionStatus.PAST_DUE,
+    "incomplete_expired": SubscriptionStatus.CANCELED,
+    "canceled": SubscriptionStatus.CANCELED,
+}
+
+
+def is_enabled() -> bool:
+    return get_settings().billing_enabled
+
+
+async def get_subscription(db: AsyncSession, mm_id: UUID) -> Subscription | None:
+    _require_enabled()
+    return await _subscription_of(db, mm_id)
+
+
+async def list_plans(db: AsyncSession, *, only_public: bool = True) -> list[Plan]:
+    """The plan catalogue. A global table, so no tenant filter applies."""
+    _require_enabled()
+    stmt = select(Plan).order_by(Plan.sort_order, Plan.code)
+    if only_public:
+        stmt = stmt.where(Plan.is_public.is_(True))
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def ensure_subscription(db: AsyncSession, mm_id: UUID) -> Subscription:
+    """Return the company's subscription, creating a dormant one if needed."""
+    _require_enabled()
+    existing = await _subscription_of(db, mm_id)
+    if existing is not None:
+        return existing
+
+    subscription = Subscription(
+        mm_id=mm_id,
+        plan_code=(await _cheapest_plan(db)).code,
+        status=SubscriptionStatus.DISABLED,
+        provider=BillingProvider.STRIPE,
+    )
+    db.add(subscription)
+    await db.flush()
+    return subscription
+
+
+async def create_checkout_session(
+    db: AsyncSession,
+    *,
+    mm_id: UUID,
+    plan_code: str,
+    success_url: str,
+    cancel_url: str,
+) -> str:
+    """Start a hosted checkout and return the URL to send the customer to."""
+    _require_enabled()
+    subscription = await ensure_subscription(db, mm_id)
+    plan = await _billable_plan(db, plan_code)
+    customer_id = await _ensure_customer(db, subscription, mm_id)
+
+    stripe = _stripe()
+    try:
+        session = await stripe.checkout.Session.create_async(
+            mode="subscription",
+            customer=customer_id,
+            line_items=[{"price": plan.stripe_price_id, "quantity": 1}],
+            success_url=success_url,
+            cancel_url=cancel_url,
+            client_reference_id=str(mm_id),
+            metadata={"mm_id": str(mm_id), "plan_code": plan.code},
+        )
+    except Exception as exc:
+        raise DomainError("BILLING_PROVIDER_ERROR") from exc
+    return str(session.url)
+
+
+async def create_portal_session(
+    db: AsyncSession, *, mm_id: UUID, return_url: str
+) -> str:
+    """Hand the customer over to Stripe's own billing portal."""
+    _require_enabled()
+    subscription = await _subscription_of(db, mm_id)
+    if subscription is None or not subscription.provider_customer_id:
+        raise NotFoundError("SUBSCRIPTION_NOT_FOUND")
+
+    stripe = _stripe()
+    try:
+        session = await stripe.billing_portal.Session.create_async(
+            customer=subscription.provider_customer_id, return_url=return_url
+        )
+    except Exception as exc:
+        raise DomainError("BILLING_PROVIDER_ERROR") from exc
+    return str(session.url)
+
+
+async def handle_webhook(db: AsyncSession, *, payload: bytes, signature: str) -> None:
+    """Apply a provider event. Replaying the same event changes nothing twice."""
+    _require_enabled()
+    event = _verified_event(payload, signature)
+    data = event["data"]["object"]
+
+    handlers = {
+        "checkout.session.completed": _on_checkout_completed,
+        "customer.subscription.created": _on_subscription_changed,
+        "customer.subscription.updated": _on_subscription_changed,
+        "customer.subscription.deleted": _on_subscription_deleted,
+        "invoice.payment_failed": _on_payment_failed,
+    }
+    handler = handlers.get(event["type"])
+    if handler is not None:
+        await handler(db, data)
+
+
+def _require_enabled() -> None:
+    if not is_enabled():
+        raise DomainError("BILLING_DISABLED")
+
+
+def _stripe() -> Any:
+    """The SDK, wired to httpx. This codebase never talks HTTP through requests."""
+    import stripe
+
+    stripe.api_key = get_settings().stripe_secret_key
+    httpx_client = getattr(stripe, "HTTPXClient", None)
+    if httpx_client is not None and stripe.default_http_client is None:
+        stripe.default_http_client = httpx_client(allow_sync_methods=True)
+    return stripe
+
+
+def _verified_event(payload: bytes, signature: str) -> Any:
+    stripe = _stripe()
+    try:
+        return stripe.Webhook.construct_event(
+            payload, signature, get_settings().stripe_webhook_secret
+        )
+    except Exception as exc:
+        raise DomainError("BILLING_WEBHOOK_INVALID", status_code=400) from exc
+
+
+async def _subscription_of(db: AsyncSession, mm_id: UUID) -> Subscription | None:
+    stmt = select(Subscription).where(Subscription.mm_id == mm_id)
+    return (await db.execute(stmt)).scalars().first()
+
+
+async def _subscription_by_customer(
+    db: AsyncSession, customer_id: str | None
+) -> Subscription | None:
+    if not customer_id:
+        return None
+    stmt = select(Subscription).where(
+        Subscription.provider_customer_id == customer_id
+    )
+    return (await db.execute(stmt)).scalars().first()
+
+
+async def _billable_plan(db: AsyncSession, plan_code: str) -> Plan:
+    plan = await db.get(Plan, plan_code)
+    if plan is None or not plan.stripe_price_id:
+        raise NotFoundError("PLAN_NOT_FOUND", plan_code=plan_code)
+    return plan
+
+
+async def _cheapest_plan(db: AsyncSession) -> Plan:
+    stmt = select(Plan).order_by(Plan.price_cents, Plan.sort_order).limit(1)
+    plan = (await db.execute(stmt)).scalars().first()
+    if plan is None:
+        raise NotFoundError("PLAN_NOT_FOUND", plan_code="-")
+    return plan
+
+
+async def _ensure_customer(
+    db: AsyncSession, subscription: Subscription, mm_id: UUID
+) -> str:
+    if subscription.provider_customer_id:
+        return subscription.provider_customer_id
+
+    stripe = _stripe()
+    try:
+        customer = await stripe.Customer.create_async(metadata={"mm_id": str(mm_id)})
+    except Exception as exc:
+        raise DomainError("BILLING_PROVIDER_ERROR") from exc
+
+    subscription.provider_customer_id = str(customer.id)
+    await db.flush()
+    return subscription.provider_customer_id
+
+
+async def _on_checkout_completed(db: AsyncSession, data: Any) -> None:
+    mm_id = _mm_id_of(data)
+    subscription = (
+        await _subscription_of(db, mm_id)
+        if mm_id
+        else await _subscription_by_customer(db, data.get("customer"))
+    )
+    if subscription is None:
+        return
+    subscription.provider_customer_id = data.get("customer") or subscription.provider_customer_id
+    subscription.provider_subscription_id = (
+        data.get("subscription") or subscription.provider_subscription_id
+    )
+    subscription.status = SubscriptionStatus.ACTIVE
+    await db.flush()
+
+
+async def _on_subscription_changed(db: AsyncSession, data: Any) -> None:
+    subscription = await _target_of(db, data)
+    if subscription is None:
+        return
+
+    subscription.provider_subscription_id = data.get("id")
+    subscription.status = PROVIDER_STATUS.get(
+        str(data.get("status")), SubscriptionStatus.PAST_DUE
+    )
+    subscription.cancel_at_period_end = bool(data.get("cancel_at_period_end"))
+    subscription.current_period_start = _moment(data.get("current_period_start"))
+    subscription.current_period_end = _moment(data.get("current_period_end"))
+
+    plan_code = await _plan_code_for_price(db, _price_id_of(data))
+    if plan_code:
+        subscription.plan_code = plan_code
+    await db.flush()
+
+
+async def _on_subscription_deleted(db: AsyncSession, data: Any) -> None:
+    subscription = await _target_of(db, data)
+    if subscription is None:
+        return
+    subscription.status = SubscriptionStatus.CANCELED
+    subscription.cancel_at_period_end = False
+    await db.flush()
+
+
+async def _on_payment_failed(db: AsyncSession, data: Any) -> None:
+    subscription = await _subscription_by_customer(db, data.get("customer"))
+    if subscription is None:
+        return
+    subscription.status = SubscriptionStatus.PAST_DUE
+    await db.flush()
+
+
+async def _target_of(db: AsyncSession, data: Any) -> Subscription | None:
+    mm_id = _mm_id_of(data)
+    if mm_id is not None:
+        return await _subscription_of(db, mm_id)
+    return await _subscription_by_customer(db, data.get("customer"))
+
+
+async def _plan_code_for_price(db: AsyncSession, price_id: str | None) -> str | None:
+    if not price_id:
+        return None
+    stmt = select(Plan).where(Plan.stripe_price_id == price_id)
+    plan = (await db.execute(stmt)).scalars().first()
+    return plan.code if plan else None
+
+
+def _price_id_of(data: Any) -> str | None:
+    items = (data.get("items") or {}).get("data") or []
+    if not items:
+        return None
+    return (items[0].get("price") or {}).get("id")
+
+
+def _mm_id_of(data: Any) -> UUID | None:
+    raw = (data.get("metadata") or {}).get("mm_id") or data.get("client_reference_id")
+    try:
+        return UUID(str(raw)) if raw else None
+    except ValueError:
+        return None
+
+
+def _moment(timestamp: Any) -> datetime | None:
+    return datetime.fromtimestamp(int(timestamp), UTC) if timestamp else None

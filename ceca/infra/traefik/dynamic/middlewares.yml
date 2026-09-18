@@ -1,0 +1,66 @@
+# Traefik 3 dynamic configuration: middlewares shared by every router.
+
+http:
+  middlewares:
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        contentTypeNosniff: true
+        frameDeny: true
+        browserXssFilter: true
+        referrerPolicy: strict-origin-when-cross-origin
+        customResponseHeaders:
+          X-Powered-By: ""
+          Server: ""
+          Permissions-Policy: "camera=(), microphone=(), geolocation=()"
+
+    # The public QR viewer must never reach a search index or a shared cache.
+    public-viewer:
+      headers:
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow"
+          Cache-Control: "no-store"
+          Pragma: "no-cache"
+
+    # Credential stuffing guard on the login endpoint.
+    login-ratelimit:
+      rateLimit:
+        average: 5
+        burst: 10
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # A labelled parcel can be scanned repeatedly by the same roadside agent,
+    # so the viewer limit is looser than login but still bounded.
+    viewer-ratelimit:
+      rateLimit:
+        average: 60
+        burst: 30
+        period: 1m
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    api-ratelimit:
+      rateLimit:
+        average: 300
+        burst: 100
+        period: 1m
+
+  routers:
+    # Same service as the api router, but matched first so the rate limit applies
+    # only to the login endpoint. The service is declared by the Docker labels.
+    estampa-login:
+      rule: "Path(`/api/v1/auth/login`)"
+      entryPoints:
+        - web
+      priority: 200
+      service: estampa-api@docker
+      middlewares:
+        - security-headers
+        - login-ratelimit

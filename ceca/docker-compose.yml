@@ -1,0 +1,141 @@
+name: estampa
+
+services:
+  traefik:
+    image: traefik:3.1
+    restart: unless-stopped
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - ./infra/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./infra/traefik/dynamic:/etc/traefik/dynamic:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - api
+      - frontend
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-estampa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-estampa}
+      POSTGRES_DB: ${POSTGRES_DB:-estampa}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-estampa} -d ${POSTGRES_DB:-estampa}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-estampa}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-estampa-dev-secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      target: runtime
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://estampa:estampa@postgres:5432/estampa}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.estampa-api.loadbalancer.server.port=8000
+      # The management API.
+      - traefik.http.routers.estampa-api.rule=PathPrefix(`/api`)
+      - traefik.http.routers.estampa-api.entrypoints=web
+      - traefik.http.routers.estampa-api.priority=100
+      - traefik.http.routers.estampa-api.service=estampa-api
+      - traefik.http.routers.estampa-api.middlewares=security-headers@file,api-ratelimit@file
+      # The public QR viewer: same service, stricter headers, never indexed.
+      - traefik.http.routers.estampa-viewer.rule=PathPrefix(`/v/`)
+      - traefik.http.routers.estampa-viewer.entrypoints=web
+      - traefik.http.routers.estampa-viewer.priority=110
+      - traefik.http.routers.estampa-viewer.service=estampa-api
+      - traefik.http.routers.estampa-viewer.middlewares=security-headers@file,public-viewer@file,viewer-ratelimit@file
+
+  worker:
+    build:
+      context: ./backend
+      target: runtime
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://estampa:estampa@postgres:5432/estampa}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    command: ["dramatiq", "app.tasks", "--processes", "2", "--threads", "4"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - traefik.enable=false
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+    expose:
+      - "5173"
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.estampa-frontend.loadbalancer.server.port=5173
+      - traefik.http.routers.estampa-frontend.rule=PathPrefix(`/`)
+      - traefik.http.routers.estampa-frontend.entrypoints=web
+      - traefik.http.routers.estampa-frontend.priority=1
+      - traefik.http.routers.estampa-frontend.service=estampa-frontend
+      - traefik.http.routers.estampa-frontend.middlewares=security-headers@file
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

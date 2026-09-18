@@ -1,0 +1,56 @@
+# Traefik 3 static configuration.
+# Routers come from two places: Docker labels (services) and the dynamic file
+# below (middlewares). Middlewares are referenced from labels as `name@file`.
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+accessLog:
+  filters:
+    statusCodes:
+      - "400-599"
+  fields:
+    headers:
+      defaultMode: drop
+      names:
+        User-Agent: keep
+        X-Request-ID: keep
+
+api:
+  dashboard: true
+  insecure: true  # Local only. Production terminates the dashboard behind auth.
+
+entryPoints:
+  web:
+    address: ":80"
+    # Production flips this on once certificates are issued.
+    # http:
+    #   redirections:
+    #     entryPoint:
+    #       to: websecure
+    #       scheme: https
+  websecure:
+    address: ":443"
+  dashboard:
+    address: ":8080"
+
+providers:
+  docker:
+    exposedByDefault: false
+    watch: true
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# Uncomment and set the e-mail when a real domain is in play.
+# certificatesResolvers:
+#   letsencrypt:
+#     acme:
+#       email: ops@example.com
+#       storage: /letsencrypt/acme.json
+#       httpChallenge:
+#         entryPoint: web
