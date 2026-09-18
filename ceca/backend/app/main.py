@@ -100,7 +100,14 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["X-Request-ID", "Content-Disposition"],
+        expose_headers=[
+            "X-Request-ID",
+            "Content-Disposition",
+            # A truncated export is only honest if the SPA can read that it was.
+            "X-Export-Total",
+            "X-Export-Row-Limit",
+            "X-Export-Truncated",
+        ],
     )
 
     @app.exception_handler(DomainError)

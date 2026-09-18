@@ -2,6 +2,17 @@
 
 http:
   middlewares:
+    # A DeCA file is capped at 5 MB by the Resolution and an upload carries at
+    # most MAX_FILES_PER_UPLOAD of them. The application already enforces that
+    # while the body streams in; this stops an oversized body from reaching the
+    # process at all. Keep it above the application's own ceiling, never below,
+    # or a legitimate batch is cut off at the edge with an opaque error.
+    upload-body-limit:
+      buffering:
+        maxRequestBodyBytes: 629145600
+        memRequestBodyBytes: 1048576
+        retryExpression: "IsNetworkError() && Attempts() < 2"
+
     security-headers:
       headers:
         stsSeconds: 31536000

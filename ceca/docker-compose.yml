@@ -137,7 +137,7 @@ services:
       - traefik.http.routers.estampa-api.entrypoints=web,websecure
       - traefik.http.routers.estampa-api.priority=100
       - traefik.http.routers.estampa-api.service=estampa-api
-      - traefik.http.routers.estampa-api.middlewares=security-headers@file,api-ratelimit@file
+      - traefik.http.routers.estampa-api.middlewares=security-headers@file,api-ratelimit@file,upload-body-limit@file
       # The public QR viewer: same service, stricter headers, never indexed.
       - traefik.http.routers.estampa-viewer.rule=PathPrefix(`/v/`)
       - traefik.http.routers.estampa-viewer.entrypoints=web,websecure

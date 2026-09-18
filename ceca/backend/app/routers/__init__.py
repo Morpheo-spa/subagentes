@@ -6,6 +6,7 @@ explicit output schema. Business rules live in ``app/services``, never here.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated
 from urllib.parse import quote
 
@@ -59,6 +60,14 @@ ClientIpHash = Annotated[str | None, Depends(get_client_ip_hash)]
 
 
 def content_disposition(disposition: str, filename: str) -> str:
-    """RFC 5987 header value, so accented delivery note names survive."""
+    """RFC 5987 header value, so accented delivery note names survive.
+
+    Control characters are replaced here rather than at each call site. A name
+    holding CRLF makes the whole response invalid and the download fails with a
+    500 for everyone, the inspector scanning the QR included. Callers do sanitise
+    today, but the guarantee belongs with the function that builds the header,
+    not with whoever remembers to call a helper first.
+    """
     ascii_name = filename.encode("ascii", "replace").decode("ascii").replace('"', "_")
+    ascii_name = re.sub(r"[\x00-\x1f\x7f]", "_", ascii_name)
     return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename, safe='')}"
