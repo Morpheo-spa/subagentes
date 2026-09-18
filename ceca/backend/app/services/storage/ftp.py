@@ -13,8 +13,14 @@ from app.services.storage.base import (
     normalise_key,
     register,
 )
+from app.services.storage.validation import validate_host
 
 DEFAULT_PORT = 21
+#: Seconds to open the control connection, and to wait on any one socket read.
+#: A tenant's server that never answers used to hold the request, and its
+#: database connection, for as long as the kernel took to give up (audit N-05).
+CONNECTION_TIMEOUT = 10
+SOCKET_TIMEOUT = 30
 
 
 @register(StorageKind.FTP)
@@ -23,8 +29,8 @@ class FtpStorage:
         config = backend.config
         credentials = credentials_of(backend)
         self._name = backend.name
-        self._host = config.get("host", "")
-        self._port = int(config.get("port") or DEFAULT_PORT)
+        # Re-checked here, as the S3 adapter does: the row may predate the check.
+        self._host, self._port = validate_host(config.get("host"), config.get("port"))
         self._base_path = (config.get("base_path") or "").strip("/")
         self._use_tls = bool(config.get("tls"))
         self._user = credentials.get("username") or config.get("username") or "anonymous"
@@ -43,6 +49,8 @@ class FtpStorage:
             user=self._user,
             password=self._password,
             ssl=self._use_tls or None,
+            connection_timeout=CONNECTION_TIMEOUT,
+            socket_timeout=SOCKET_TIMEOUT,
         )
 
     async def put(self, key: str, data: bytes, content_type: str) -> None:

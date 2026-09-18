@@ -150,7 +150,18 @@ def check_production_flags(env: dict[str, str]) -> list[str]:
     if base_url.endswith("/"):
         problems.append("PUBLIC_BASE_URL: must not end with a slash")
     problems.extend(check_trusted_proxies(env))
+    problems.extend(check_storage_egress(env))
     return problems
+
+
+def check_storage_egress(env: dict[str, str]) -> list[str]:
+    """The SSRF guard on tenant storage endpoints returns early when this is on."""
+    if is_true(env.get("ALLOW_PRIVATE_STORAGE_ENDPOINTS", "")):
+        return [
+            "ALLOW_PRIVATE_STORAGE_ENDPOINTS: must be false in production - with it "
+            "on, any tenant can point a storage backend at the internal network"
+        ]
+    return []
 
 
 def check_trusted_proxies(env: dict[str, str]) -> list[str]:

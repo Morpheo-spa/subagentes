@@ -57,7 +57,26 @@ export default function DocumentsPage() {
     setSearchParams(next)
   }
 
-  const addToQueue = (ids: string[]) =>
+  // A label with a QR on a scan would present it as a valid DeCA. The backend
+  // refuses a scan (PRINT_NOT_A_DECA) and a withdrawn or superseded document
+  // (PRINT_DOCUMENT_UNAVAILABLE) and would reject the whole batch; the bulk bar
+  // applies the same rule so one scan in the selection does not sink the rest.
+  // An incomplete native PDF is still printable: the sheet says what is missing.
+  const addToQueue = (requested: string[]) => {
+    const printable = new Set(
+      documents
+        .filter(
+          (document) =>
+            document.compliance_status !== 'not_a_deca' &&
+            !document.withdrawn_at &&
+            !document.superseded_at,
+        )
+        .map((document) => document.id),
+    )
+    const ids = requested.filter((id) => printable.has(id))
+    const skipped = requested.length - ids.length
+    if (skipped > 0) toast.warning(t('documents.queueSkippedInvalid', { count: skipped }))
+    if (ids.length === 0) return
     queue.mutate(
       { documentIds: ids },
       {
@@ -69,6 +88,7 @@ export default function DocumentsPage() {
           toast.error(error instanceof ApiError ? error.message : t('errors.unexpected')),
       },
     )
+  }
 
   // El CSV va detras del bearer: se descarga con la sesion, no abriendo la URL.
   // `GET /documents/export.csv` exporta lo que filtren los parametros; no

@@ -14,10 +14,11 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import contains_eager
 
 from app.deps import TenantContext, scoped, scoped_select
 from app.errors import DomainError, NotFoundError
-from app.models.documents import Document
+from app.models.documents import ComplianceStatus, Document, DocumentStatus
 from app.models.printing import PrintJob, PrintJobItem, PrintJobStatus, PrintLayout, PrintQueueItem
 from app.services import audit, quota
 from app.services.documents import active_share_token
@@ -118,6 +119,8 @@ async def add_to_queue(
 
     owner = user_id or ctx.user_id
     documents = await _documents_of(db, ctx, document_ids)
+    for document in documents:
+        _reject_unprintable(document)
     position = await _next_position(db, ctx, owner)
 
     items = []
@@ -130,6 +133,9 @@ async def add_to_queue(
             copies=copies,
             position=position + offset,
         )
+        # Assigned, not merely keyed: the caller serialises the item with its
+        # document, and the relationship refuses to lazy-load (see the model).
+        item.document = document
         db.add(item)
         items.append(item)
     await db.flush()
@@ -144,9 +150,22 @@ async def list_queue(
     offset: int | None = None,
     limit: int | None = None,
 ) -> tuple[list[PrintQueueItem], int]:
-    """One page of the caller's own queue, plus how many labels it holds."""
+    """One page of the caller's own queue, plus how many labels it holds.
+
+    Each item comes back with its :class:`Document` already loaded, through an
+    inner join that carries the tenant filter on *both* tables. The label is
+    named after the document (``label-template.md``), so a queue without the
+    document is a queue of bare UUIDs.
+    """
     owner = user_id or ctx.user_id
-    base = scoped_select(PrintQueueItem, ctx).where(PrintQueueItem.user_id == owner)
+    base = scoped(
+        scoped_select(PrintQueueItem, ctx)
+        .where(PrintQueueItem.user_id == owner)
+        .join(Document, Document.id == PrintQueueItem.document_id)
+        .options(contains_eager(PrintQueueItem.document)),
+        ctx,
+        Document,
+    )
     total = await db.scalar(
         scoped(select(func.count(PrintQueueItem.id)), ctx, PrintQueueItem).where(
             PrintQueueItem.user_id == owner
@@ -440,6 +459,28 @@ async def _increment_print_counts(db: AsyncSession, ctx: TenantContext, job: Pri
     }
     for item in items:
         documents[item.document_id].print_count += item.copies
+
+
+def _reject_unprintable(document: Document) -> None:
+    """A label is a claim: "scan this, it is a DeCA". Only make it for one.
+
+    A scan carries no text layer and can never be a control document, whatever
+    QR is stuck on it (``CLAUDE.md`` prohibition 13). A superseded revision or a
+    withdrawn file no longer resolves to anything an inspector should see.
+    Compared with ``==``: rows loaded from the database hold plain strings.
+    """
+    if document.compliance_status == ComplianceStatus.NOT_A_DECA:
+        raise DomainError("PRINT_NOT_A_DECA", status_code=422, filename=document.original_filename)
+    unavailable = (
+        document.withdrawn_at is not None
+        or document.superseded_at is not None
+        or document.compliance_status == ComplianceStatus.SUPERSEDED
+        or document.status == DocumentStatus.WITHDRAWN
+    )
+    if unavailable:
+        raise DomainError(
+            "PRINT_DOCUMENT_UNAVAILABLE", status_code=409, filename=document.original_filename
+        )
 
 
 def _page_count(template: LabelTemplate, label_count: int, start_position: int) -> int:

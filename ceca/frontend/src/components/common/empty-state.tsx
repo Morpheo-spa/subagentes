@@ -24,7 +24,7 @@ export function EmptyState({
       )}
     >
       <IconComponent size={32} aria-hidden="true" className="text-muted-foreground" />
-      <p className="text-lead font-semibold">{title}</p>
+      <h2 className="text-lead font-semibold">{title}</h2>
       {description ? <p className="max-w-prose text-sm text-muted-foreground">{description}</p> : null}
       {action}
     </div>

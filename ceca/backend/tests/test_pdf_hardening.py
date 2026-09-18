@@ -235,3 +235,84 @@ def test_only_a_bounded_number_of_fields_is_ever_drawn() -> None:
     drawn = pdf._ordered_items(_deca(pdf.MAX_RENDERED_FIELDS * 4, 10), "es")
 
     assert len(drawn) == pdf.MAX_RENDERED_FIELDS
+
+
+def _one_page_with(operators: int, text: bytes = b"") -> bytes:
+    """A syntactically clean single page whose content stream is mostly noise.
+
+    ``() Tj`` draws nothing, so no amount of it ever satisfies the text probe:
+    the parser has to walk every operator. Compressed, a few hundred thousand
+    of them fit in well under the upload limit.
+    """
+    import zlib
+
+    content = zlib.compress(b"BT /F1 12 Tf " + (b"(" + text + b") Tj ") * operators + b"ET")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R "
+        b"/Resources << /Font << /F1 5 0 R >> >> >>",
+        b"<< /Length %d /Filter /FlateDecode >>\nstream\n" % len(content)
+        + content
+        + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    for offset in offsets:
+        out += b"%010d 00000 n \n" % offset
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1,
+        xref,
+    )
+    return bytes(out)
+
+
+def test_a_content_stream_that_never_ends_stops_at_the_deadline() -> None:
+    """N-02: the deadline has to reach inside a page, not only between pages.
+
+    Before the fix the request timed out cleanly while the worker thread went
+    on at 100 % CPU for minutes. Now the thread itself gives up.
+    """
+    data = _one_page_with(150_000)
+    assert len(data) < 64 * 1024
+
+    original_seconds = pdf.PDF_WORK_SECONDS
+    pdf.PDF_WORK_SECONDS = 0.2
+    started = time.monotonic()
+    try:
+        with pytest.raises(DomainError) as raised:
+            pdf.inspect(data, filename="lento.pdf")
+    finally:
+        pdf.PDF_WORK_SECONDS = original_seconds
+    elapsed = time.monotonic() - started
+
+    assert raised.value.code == "PDF_ANALYSIS_TIMEOUT"
+    assert elapsed < 3.0, f"the parser kept going for {elapsed:.1f}s past a 0.2s deadline"
+
+
+def test_a_page_with_megabytes_of_operators_is_refused_before_parsing() -> None:
+    """Tokenising runs before any hook can interrupt it, so size is the guard."""
+    data = _one_page_with(600_000, text=b"albaran")
+    assert len(data) < 64 * 1024
+
+    started = time.monotonic()
+    with pytest.raises(DomainError) as raised:
+        pdf.inspect(data, filename="denso.pdf")
+    elapsed = time.monotonic() - started
+
+    assert raised.value.code == "PDF_PAGE_TOO_COMPLEX"
+    assert raised.value.params["max_kilobytes"] == pdf.MAX_PAGE_CONTENT_BYTES // 1024
+    assert elapsed < 3.0, f"refusing took {elapsed:.1f}s"
+
+
+def test_a_dense_but_honest_page_still_counts_as_text() -> None:
+    data = _one_page_with(2_000, text=b"albaran")
+    facts = pdf.inspect(data, filename="texto.pdf")
+    assert facts.page_count == 1
+    assert facts.has_text_layer is True

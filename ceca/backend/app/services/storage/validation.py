@@ -28,11 +28,16 @@ from app.errors import DomainError
 ALLOWED_SCHEMES = frozenset({"http", "https"})
 ALLOWED_PORTS = frozenset({80, 443, 9000, 9001, 8333})
 
+# Carrier-grade NAT (RFC 6598). Python does not count it as private, and at
+# least one cloud (Alibaba) serves its instance metadata from 100.100.100.200.
+CGNAT = ipaddress.ip_network("100.64.0.0/10")
+
 
 def _is_forbidden(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Everything that is not a plain, routable public address."""
     return (
-        address.is_private
+        (isinstance(address, ipaddress.IPv4Address) and address in CGNAT)
+        or address.is_private
         or address.is_loopback
         or address.is_link_local  # 169.254.0.0/16 holds the cloud metadata service
         or address.is_multicast
@@ -87,6 +92,38 @@ def validate_endpoint_url(url: str | None) -> str | None:
     return url
 
 
+def validate_host(host: str | None, port: object) -> tuple[str, int]:
+    """The FTP twin of :func:`validate_endpoint_url`: a host and a port.
+
+    Same rule, same reason. Without it the FTP adapter was the door the S3
+    check had closed: any internal address, any port, and a health check that
+    reported whether something answered (audit N-05).
+    """
+    settings = get_settings()
+    if not host or not isinstance(host, str) or "/" in host or host != host.strip():
+        raise DomainError("STORAGE_ENDPOINT_INVALID", url=str(host or ""))
+    try:
+        port_number = int(port) if port not in (None, "") else 21  # type: ignore[call-overload]
+    except (TypeError, ValueError) as exc:
+        raise DomainError("STORAGE_ENDPOINT_PORT_INVALID", port=str(port)) from exc
+    if not 1 <= port_number <= 65535:
+        raise DomainError("STORAGE_ENDPOINT_PORT_INVALID", port=port_number)
+
+    if settings.allow_private_storage_endpoints:
+        return host, port_number
+
+    try:
+        literal = ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        addresses = _resolved_addresses(host)
+    else:
+        addresses = [literal]
+    for address in addresses:
+        if _is_forbidden(address):
+            raise DomainError("STORAGE_ENDPOINT_NOT_PUBLIC", host=host)
+    return host, port_number
+
+
 def validate_base_path(base_path: str | None) -> str:
     """Confine the local adapter to the directory the deployment set aside.
 
@@ -118,6 +155,13 @@ def validate_config(kind: str, config: dict[str, object]) -> dict[str, object]:
         checked["endpoint_url"] = validate_endpoint_url(
             endpoint if isinstance(endpoint, str) else None
         )
+    if kind == "ftp":
+        raw_host = checked.get("host")
+        host, port = validate_host(
+            raw_host if isinstance(raw_host, str) else None, checked.get("port")
+        )
+        checked["host"] = host
+        checked["port"] = port
     if kind == "local":
         raw = checked.get("base_path")
         checked["base_path"] = validate_base_path(raw if isinstance(raw, str) else None)

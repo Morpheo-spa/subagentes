@@ -37,18 +37,19 @@ http:
           Pragma: "no-cache"
 
     # Credential stuffing guard on the login endpoint.
-    # depth: 1 counts X-Forwarded-For from the RIGHT, so it reads the address
-    # Traefik itself saw and a client-supplied prefix cannot shift it. The
-    # application does the same with TRUSTED_PROXY_COUNT (app/routers/client_ip);
-    # both numbers describe the same thing and must be changed together.
+    # No ipStrategy on purpose: the key is the TCP peer address (RemoteAddr).
+    # Traefik is the edge, so the peer IS the client. An `ipStrategy.depth`
+    # would read X-Forwarded-For, which Traefik has already stripped from an
+    # untrusted peer at this point (its own address is appended later, in the
+    # reverse proxy), so the key would be "" for everyone and ten requests
+    # would lock the login of the whole platform (audit N-01). The application
+    # reads the same client with TRUSTED_PROXY_COUNT=1 (app/routers/client_ip),
+    # counting the address Traefik appends; the two describe the same hop.
     login-ratelimit:
       rateLimit:
         average: 5
         burst: 10
         period: 1m
-        sourceCriterion:
-          ipStrategy:
-            depth: 1
 
     # A labelled parcel can be scanned repeatedly by the same roadside agent,
     # so the viewer limit is looser than login but still bounded.
@@ -57,9 +58,6 @@ http:
         average: 60
         burst: 30
         period: 1m
-        sourceCriterion:
-          ipStrategy:
-            depth: 1
 
     api-ratelimit:
       rateLimit:

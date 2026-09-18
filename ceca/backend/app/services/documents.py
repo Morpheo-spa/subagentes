@@ -11,6 +11,7 @@ import csv
 import hashlib
 import io
 import re
+import unicodedata
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
@@ -65,6 +66,15 @@ MAX_RENDER_CHARS = 60_000
 #: existed have to stay downloadable, which is the whole point.
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 FALLBACK_FILENAME = "documento.pdf"
+
+#: A generated DeCA is named after its transport date and its shipper, so two
+#: of them can be told apart in the archive table. Only this alphabet survives
+#: - safe in a header, on any filesystem and in a URL - and the whole name,
+#: short id and extension included, never exceeds this length.
+GENERATED_FILENAME_MAX = 80
+GENERATED_FILENAME_PREFIX = "deca"
+_FILENAME_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
+_FILENAME_SAFE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 CSV_COLUMNS = (
     "id",
@@ -707,7 +717,7 @@ async def _generate(
         id=document_id,
         mm_id=ctx.mm_id,
         site_id=ctx.site_id,
-        original_filename=filename or f"deca-{document_id}.pdf",
+        original_filename=filename or generated_filename(deca, document_id),
         storage_backend_id=backend.id,
         storage_key=storage_key_for(ctx, document_id),
         byte_size=len(rendered),
@@ -979,6 +989,43 @@ def _changed_values(previous: dict[str, Any] | None, current: dict[str, Any]) ->
 def _actor(ctx: TenantContext) -> UUID | None:
     """A background job has no user behind it."""
     return None if ctx.user_id == audit.SYSTEM_ACTOR_ID else ctx.user_id
+
+
+def generated_filename(deca: dict[str, Any], document_id: UUID) -> str:
+    """``deca-<fecha_transporte>-<cargador>-<id corto>.pdf``, or as much as fits.
+
+    ``deca-<uuid>.pdf`` told the user nothing in a table of forty rows. The
+    date comes from ``fecha_transporte`` when it parses (today otherwise), the
+    shipper from ``cargador_nombre`` reduced to ASCII letters, digits, dot,
+    dash and underscore - accents folded, everything else collapsed to one
+    dash - and the short id is what keeps two notes for the same shipper on the
+    same day from colliding. The result satisfies ``FILENAME_PATTERN``.
+    """
+    transport_date = _iso_date(deca.get("fecha_transporte")) or datetime.now(UTC).date().isoformat()
+    head = f"{GENERATED_FILENAME_PREFIX}-{transport_date}"
+    tail = f"-{document_id.hex[:8]}.pdf"
+    budget = GENERATED_FILENAME_MAX - len(head) - len(tail) - 1
+    shipper = _filename_slug(deca.get("cargador_nombre"))[:budget].strip("-.")
+    name = f"{head}-{shipper}{tail}" if shipper else f"{head}{tail}"
+    if not _FILENAME_SAFE.match(name) or len(name) > GENERATED_FILENAME_MAX:  # pragma: no cover
+        raise AssertionError(f"generated filename is not safe: {name!r}")
+    return name
+
+
+def _filename_slug(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode()
+    return _FILENAME_UNSAFE.sub("-", text).strip("-.")
+
+
+def _iso_date(value: Any) -> str | None:
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    try:
+        return datetime.fromisoformat(str(value)).date().isoformat()
+    except (TypeError, ValueError):
+        return None
 
 
 def header_filename(name: str | None) -> str:

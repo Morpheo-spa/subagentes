@@ -86,10 +86,21 @@ def build_adapter(backend: StorageBackend) -> StorageAdapter:
     return factory(backend)
 
 
+_ADAPTERS_LOADED = False
+
+
 def _load_adapters() -> None:
-    """Import the concrete modules so their decorators populate the registry."""
-    if REGISTRY:
+    """Import the concrete modules so their decorators populate the registry.
+
+    Guarded by a flag, not by "is the registry non-empty": importing one
+    adapter module directly (a test, a script) registers that kind alone, and
+    the old guard then took the registry for complete and answered
+    STORAGE_KIND_UNAVAILABLE for the local adapter it never imported.
+    """
+    global _ADAPTERS_LOADED  # noqa: PLW0603
+    if _ADAPTERS_LOADED:
         return
+    _ADAPTERS_LOADED = True
     from app.services.storage import (  # noqa: F401
         ftp,
         local,

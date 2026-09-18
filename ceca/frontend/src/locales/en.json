@@ -117,12 +117,13 @@
   "deca": {
     "blockHints": {
       "cargador": "The party contracting directly with the actual carrier.",
-      "envio": "Origin, destination, date, vehicle and goods.",
       "transportista": "Holder of the authorisation under which the transport is performed."
     },
     "blocks": {
       "cargador": "Contracting shipper",
-      "envio": "Shipment and goods",
+      "envio": "Shipment",
+      "mercancia": "Goods",
+      "observaciones": "Remarks",
       "transportista": "Actual carrier"
     },
     "changeReason": "Reason for the change",
@@ -227,7 +228,8 @@
     "withdrawReason": "Reason for withdrawal",
     "withdrawTitle": "Withdraw the document",
     "withdrawn": "Document withdrawn",
-    "withdrawnOn": "Withdrawn on {date}. Reason: {reason}"
+    "withdrawnOn": "Withdrawn on {date}. Reason: {reason}",
+    "queueSkippedInvalid": "{count} not added: a scan is not a valid DeCA and gets no label"
   },
   "errors": {
     "code": "Code: {code}",

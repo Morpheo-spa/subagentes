@@ -110,9 +110,13 @@ export function DecaForm({
           <legend className="px-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             {t(`deca.blocks.${entry.block}`)}
           </legend>
-          <p className="mb-4 text-meta text-muted-foreground">
-            {t(`deca.blockHints.${entry.block}`)}
-          </p>
+          {/* Solo las partes llevan aclaracion (quien es quien). Un hint que
+              repite el titulo del bloque no se pinta (MASTER §2). */}
+          {t(`deca.blockHints.${entry.block}`) !== `deca.blockHints.${entry.block}` ? (
+            <p className="mb-4 text-meta text-muted-foreground">
+              {t(`deca.blockHints.${entry.block}`)}
+            </p>
+          ) : null}
           <div className="grid gap-4 md:grid-cols-2">
             {entry.fields.map((field) => (
               <form.Field
@@ -152,8 +156,11 @@ export function DecaForm({
           const current = values as DecaValues
           const missing = missingRequired(fields, current)
           const sameParty = !partiesAreDistinct(fields, current)
+          // deca-form.md: barra fija inferior con el resumen de validacion y la
+          // unica accion primaria. Pegajosa dentro del formulario: en un
+          // catalogo de 13 campos el boton quedaba fuera de la pantalla.
           return (
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-border bg-card py-3">
               <Button type="submit" disabled={submitting}>
                 {submitting ? t('common.saving') : submitLabel}
               </Button>

@@ -117,12 +117,13 @@
   "deca": {
     "blockHints": {
       "cargador": "Quien contrata directamente con el transportista efectivo.",
-      "envio": "Origen, destino, fecha, vehículo y mercancía.",
       "transportista": "Titular de la autorización al amparo de la cual se realiza el transporte."
     },
     "blocks": {
       "cargador": "Cargador contractual",
-      "envio": "Envío y mercancía",
+      "envio": "Envío",
+      "mercancia": "Mercancía",
+      "observaciones": "Observaciones",
       "transportista": "Transportista efectivo"
     },
     "changeReason": "Motivo de la modificación",
@@ -227,7 +228,8 @@
     "withdrawReason": "Motivo de la retirada",
     "withdrawTitle": "Retirar el documento",
     "withdrawn": "Documento retirado",
-    "withdrawnOn": "Retirado el {date}. Motivo: {reason}"
+    "withdrawnOn": "Retirado el {date}. Motivo: {reason}",
+    "queueSkippedInvalid": "{count} no se han añadido: un escaneo no es un DeCA válido y no lleva etiqueta"
   },
   "errors": {
     "code": "Código: {code}",

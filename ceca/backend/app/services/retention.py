@@ -158,6 +158,10 @@ async def apply_due(db: AsyncSession, *, limit: int = 500) -> int:
         action = RetentionAction(policy.action) if policy else RetentionAction.WITHDRAW_FILE
         if await _apply(db, document, action, now):
             processed += 1
+            # One commit per document, not one at the end: the file is already
+            # gone from storage, and a sweep killed halfway must not leave rows
+            # that still say READY for a PDF that no longer exists (audit N-10).
+            await db.commit()
     return processed
 
 

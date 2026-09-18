@@ -311,6 +311,10 @@ async def update_user(
         # The whole of E-03 in one line: an admin who can rewrite their own
         # memberships can promote themselves to mm_admin and switch site.
         raise PermissionDeniedError("SELF_ROLE_CHANGE_FORBIDDEN")
+    if user.id != ctx.user_id and _takes_over_account(payload):
+        await _assert_actor_outranks(
+            db, ctx, scope, user, whole_account=bool(payload.model_fields_set & ACCOUNT_FIELDS)
+        )
     if payload.version is not None and payload.version != user.version:
         raise ConflictError("VERSION_CONFLICT")
 
@@ -338,6 +342,44 @@ async def update_user(
 
 #: Fields whose change makes the target's live access token a lie.
 SESSION_BEARING_FIELDS = frozenset({"is_active", "memberships", "password"})
+
+#: Fields that hand the actor the target's whole account, or take it away.
+ACCOUNT_FIELDS = frozenset({"password", "is_active"})
+ACCOUNT_TAKEOVER_FIELDS = ACCOUNT_FIELDS | {"memberships"}
+
+
+def _takes_over_account(payload: UserUpdate) -> bool:
+    return bool(payload.model_fields_set & ACCOUNT_TAKEOVER_FIELDS)
+
+
+async def _assert_actor_outranks(
+    db: Db, ctx: TenantContext, scope: AdminScope, target: User, *, whole_account: bool
+) -> None:
+    """Rules 2 and 3 look at what is granted; this one looks at who receives it.
+
+    Without it, a ``site_admin`` who shares one site with the ``mm_admin`` could
+    set that admin's password and log in as them: full company, billing
+    included, through a door the grant checks never see (audit N-03). So the
+    target's memberships in the sites the actor administers must be no wider
+    than the actor's own permissions there. A password or the active flag is
+    the whole account, every site included, so for those the target must not
+    belong to any site outside the actor's reach either: that membership is
+    another tenant's access. A superuser is outranked by nobody but another.
+    """
+    if target.is_superuser and not ctx.is_superuser:
+        raise PermissionDeniedError("USER_OUTRANKS_ACTOR")
+    if scope.company_wide:
+        return
+    memberships = (
+        await db.execute(select(UserSite).where(UserSite.user_id == target.id))
+    ).scalars()
+    for membership in memberships:
+        if not scope.may_administer(membership.site_id):
+            if whole_account:
+                raise PermissionDeniedError("USER_OUTRANKS_ACTOR")
+            continue
+        if not membership.permissions() <= scope.permissions_in(membership.site_id):
+            raise PermissionDeniedError("USER_OUTRANKS_ACTOR")
 
 
 def _touches_session(payload: UserUpdate) -> bool:

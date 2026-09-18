@@ -153,12 +153,17 @@ def test_the_proxy_hop_count_matches_the_rate_limit_strategy() -> None:
             encoding="utf-8"
         )
     )
-    depths = {
-        name: middleware["rateLimit"]["sourceCriterion"]["ipStrategy"]["depth"]
+    # Traefik at the edge keys its rate limiters on the TCP peer. A depth on
+    # X-Forwarded-For would read a header Traefik has already stripped at that
+    # point and bucket every public client under "" (audit N-01).
+    limiters = {
+        name: middleware["rateLimit"]
         for name, middleware in dynamic["http"]["middlewares"].items()
-        if "rateLimit" in middleware and "sourceCriterion" in middleware["rateLimit"]
+        if "rateLimit" in middleware
     }
-    assert set(depths.values()) == {1}
+    assert {"login-ratelimit", "viewer-ratelimit"} <= set(limiters)
+    for name, limiter in limiters.items():
+        assert "ipStrategy" not in limiter.get("sourceCriterion", {}), name
     get_settings.cache_clear()
     assert get_settings().trusted_proxy_count == 1
 

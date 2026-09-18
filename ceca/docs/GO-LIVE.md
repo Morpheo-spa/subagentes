@@ -11,10 +11,10 @@ Fecha de la última verificación: 2026-09-18. Rama: `claude/ceca-pdf-qr-manager
 
 | Qué | Cómo se verificó |
 |-----|------------------|
-| Migraciones 0001–0005 contra PostgreSQL 16 | `alembic upgrade head` en una base vacía; ida y vuelta completa (`downgrade base` deja 0 tablas, `upgrade head` vuelve a 5) en una base aparte |
+| Migraciones 0001–0006 contra PostgreSQL 16 | `alembic upgrade head` en una base vacía; ida y vuelta completa (`downgrade base` deja 0 tablas, `upgrade head` vuelve a 5) en una base aparte; 0006 aplicada sobre la base de demo ya migrada |
 | Sin deriva entre modelos y esquema | `alembic check` en la base migrada: "No new upgrade operations detected" |
 | Guardián de correos duplicados (0004) | Sembrados dos usuarios con el mismo correo en dos empresas; la migración aborta con mensaje claro y la versión se queda en 0003 |
-| Suite completa sobre PostgreSQL real | 209 tests, `TEST_DATABASE_URL` apuntando a Postgres 16. Misma cifra sobre SQLite con claves foráneas activas |
+| Suite completa sobre PostgreSQL real | 265 tests, `TEST_DATABASE_URL` apuntando a Postgres 16. Misma cifra sobre SQLite con claves foráneas activas |
 | Semilla de demo sobre Postgres | `scripts/seed_demo.py`: 1 empresa, 2 centros, 3 usuarios, 4 documentos; idempotente al repetirla |
 | Ciclo de vida completo de un albarán | `scripts/smoke.py`: 55 pasos contra el API con Postgres y Redis reales, y los mismos 55 a través del proxy de Vite (el origen que ve el navegador) |
 | Sesión: cookie HttpOnly, rotación, blacklist en Redis real, rechazo cross-origin, logout | Pasos de `smoke.py` y `tests/test_auth_cookie.py` |
@@ -25,8 +25,10 @@ Fecha de la última verificación: 2026-09-18. Rama: `claude/ceca-pdf-qr-manager
 | Healthcheck de la imagen | Encontrado y corregido: usaba `curl`, que la imagen de runtime no instala, así que habría marcado el contenedor como no sano siempre. Ahora usa Python y pregunta a `/health/live` |
 | Fusión de `docker-compose.yml` + `docker-compose.dev.yml` | `docker compose config` (CLI sin demonio): ocho servicios, readiness del API en `/health/ready`, planificador con las mismas restricciones que el resto, solo Traefik publica puertos |
 | Frontend | `typecheck`, `lint`, 90 tests unitarios, `npm run build` (bundle de producción) |
+| Recorrido en navegador | Playwright con Chromium real contra Vite + API + Postgres + Redis: login, subida, generación de DeCA, documentos, cola de impresión de principio a fin, visor público, accesibilidad. 10 pruebas; CI las ejecuta (`E2E_BASE_URL`) |
+| Segunda auditoría de seguridad | `docs/SECURITY-AUDIT-2.md`: 13 hallazgos nuevos sobre los arreglos de la primera; 10 cerrados con test de regresión (`tests/test_security_audit_2.py`), 3 abiertos de severidad media/baja listados en §4 |
 | Contrato frontend ↔ backend | `src/lib/contract.test.ts` contra el OpenAPI real del backend: rutas, campos y enumeraciones |
-| Gate completo con base real y API en marcha | `DATABASE_URL=… SMOKE_BASE_URL=… bash scripts/ci.sh`: todo en verde, incluidos `alembic check` y la prueba de humo |
+| Gate completo con base real y API en marcha | `DATABASE_URL=… SMOKE_BASE_URL=… E2E_BASE_URL=… bash scripts/ci.sh`: todo en verde, incluidos `alembic check`, la prueba de humo y Playwright |
 
 ## 2. Verificado solo por lectura o por configuración
 
@@ -74,3 +76,7 @@ Por este orden. Cada punto tiene su procedimiento en `RUNBOOK.md`.
   deliberada por su valor probatorio; la UI avisa.
 - La estadística de accesos no distingue `HEAD` de `GET`.
 - Los hallazgos de severidad baja E-16 a E-19 de `SECURITY-AUDIT.md`.
+- De `SECURITY-AUDIT-2.md`: N-07 (el tope de 5 MB por fichero se aplica cuando la parte
+  ya está en disco; el cuerpo entero sigue acotado a 501 MB por la API y por Traefik),
+  N-08 (resolución DNS síncrona al construir un adaptador S3 con nombre de host) y
+  N-11 (`X-Request-ID` del cliente sin acotar en longitud).

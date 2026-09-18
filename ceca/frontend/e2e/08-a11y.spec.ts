@@ -8,6 +8,7 @@ import {
   ensureLiveDocument,
   loginUi,
   settle,
+  shots,
   toSpaUrl,
   useDarkTheme,
 } from './helpers'
@@ -72,6 +73,7 @@ for (const theme of THEMES) {
       await page.waitForLoadState('networkidle')
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
       await audit(page, `${path} ${theme}`)
+      if (theme === 'dark') await shots(page, `08-oscuro${path.replaceAll('/', '-')}`)
     }
     // El panel lateral del documento tambien.
     await page.goto('/documents')

@@ -183,6 +183,23 @@ async def refresh(request: Request, response: Response, db: Db) -> SessionRespon
     return _session(response, user, membership, site)
 
 
+async def _retire_refresh_cookie(request: Request) -> None:
+    """Blacklist the refresh token the browser sent, if it is still worth it.
+
+    An expired or malformed cookie is not an error here: the caller is leaving
+    or changing site, and a 401 would leave the stale cookie in place, which is
+    the opposite of what either route is for (audit N-12).
+    """
+    cookie = request.cookies.get(REFRESH_COOKIE)
+    if not cookie:
+        return
+    try:
+        payload = decode_token(cookie, expected_type=REFRESH)
+    except DomainError:
+        return
+    await blacklist_token(payload)
+
+
 @router.post("/logout", response_model=Acknowledgement)
 async def logout(
     request: Request,
@@ -192,9 +209,7 @@ async def logout(
     db: Db,
 ) -> Acknowledgement:
     await blacklist_token(_access_payload(request))
-    cookie = request.cookies.get(REFRESH_COOKIE)
-    if cookie:
-        await blacklist_token(decode_token(cookie, expected_type=REFRESH))
+    await _retire_refresh_cookie(request)
     clear_refresh_cookie(response)
     await audit_service.record(
         db,
@@ -222,9 +237,7 @@ async def switch_site(
     membership, site = _pick_membership(user, await _memberships(db, user), payload.site_id)
     await blacklist_token(_access_payload(request))
     # The old refresh token still names the old site, so it is replaced, not kept.
-    cookie = request.cookies.get(REFRESH_COOKIE)
-    if cookie:
-        await blacklist_token(decode_token(cookie, expected_type=REFRESH))
+    await _retire_refresh_cookie(request)
     return _session(response, user, membership, site)
 
 

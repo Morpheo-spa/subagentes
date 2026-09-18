@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, OptimisticLock, TenantScoped, TimestampMixin, uuid_pk
+from app.models.documents import Document
 
 
 class PrintLayout(enum.StrEnum):
@@ -41,6 +42,12 @@ class PrintQueueItem(Base, TenantScoped, TimestampMixin, OptimisticLock):
     )
     copies: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    #: The row the label names. ``lazy="raise"``: an async session cannot load
+    #: it on attribute access, and a silent ``MissingGreenlet`` is exactly the
+    #: bug that shipped a queue full of bare UUIDs. ``printing.list_queue``
+    #: joins it in, under the same tenant filter as the queue item itself.
+    document: Mapped[Document] = relationship(lazy="raise")
 
 
 class PrintJob(Base, TenantScoped, TimestampMixin, OptimisticLock):

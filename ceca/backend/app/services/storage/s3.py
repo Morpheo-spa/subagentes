@@ -39,11 +39,59 @@ def _session(credentials: dict[str, Any]) -> Any:
     )
 
 
-def _no_metadata_lookup() -> Any:
-    """Belt and braces: refuse the metadata service even if a key slips through."""
-    from botocore.config import Config
+def _client_config(force_path_style: bool) -> Any:
+    """One Config for every client, whatever the addressing style.
 
-    return Config(retries={"max_attempts": 2}, connect_timeout=5, read_timeout=30)
+    Two things in here are security controls, not tuning:
+
+    * ``allow_redirects`` is switched off at the HTTP layer. aiohttp follows a
+      3xx by default and aiobotocore does not override that, so a whitelisted
+      endpoint could answer ``307 Location: http://10.0.0.5:5432/`` and turn
+      ``health()`` into a blind port scanner of the internal network. aiohttp
+      drops ``Authorization`` on a cross-origin hop, so credentials were never
+      at stake; the oracle was.
+    * Timeouts bound how long a tenant-controlled host can hold a worker
+      thread, and they are the same Config whether or not path style is on. A
+      previous version replaced the whole Config when ``force_path_style`` was
+      set and silently lost them (audit N-06).
+    """
+    from aiobotocore.config import AioConfig
+
+    s3_options = {"addressing_style": "path"} if force_path_style else {}
+    return AioConfig(
+        retries={"max_attempts": 2},
+        connect_timeout=5,
+        read_timeout=30,
+        s3=s3_options,
+        http_session_cls=_no_redirect_session_class(),
+    )
+
+
+def _no_redirect_session_class() -> Any:
+    """An aiobotocore HTTP session whose aiohttp client never follows a 3xx."""
+    import aiohttp
+    from aiobotocore.httpsession import AIOHTTPSession
+
+    class _NoRedirectClientSession(aiohttp.ClientSession):
+        async def _request(self, method: str, str_or_url: Any, **kwargs: Any) -> Any:
+            kwargs["allow_redirects"] = False
+            return await super()._request(method, str_or_url, **kwargs)
+
+    class _NoRedirectHttpSession(AIOHTTPSession):  # type: ignore[misc]
+        async def _get_session(self, proxy_url: Any) -> Any:
+            if not (session := self._sessions.get(proxy_url)):
+                connector = self._create_connector(proxy_url)
+                self._sessions[proxy_url] = session = await self._exit_stack.enter_async_context(
+                    _NoRedirectClientSession(
+                        connector=connector,
+                        timeout=self._timeout,
+                        skip_auto_headers={"CONTENT-TYPE"},
+                        auto_decompress=False,
+                    )
+                )
+            return session
+
+    return _NoRedirectHttpSession
 
 
 @register(StorageKind.S3)
@@ -58,10 +106,8 @@ class S3Storage:
         self._client_kwargs: dict[str, Any] = {
             "region_name": config.get("region"),
             "endpoint_url": validate_endpoint_url(config.get("endpoint_url")),
-            "config": _no_metadata_lookup(),
+            "config": _client_config(bool(config.get("force_path_style"))),
         }
-        if config.get("force_path_style"):
-            self._client_kwargs["config"] = _path_style_config()
         self._session = _session(credentials_of(backend))
 
     def _object_key(self, key: str) -> str:
@@ -108,9 +154,3 @@ class S3Storage:
         except Exception:
             return False
         return True
-
-
-def _path_style_config() -> Any:
-    from botocore.config import Config
-
-    return Config(s3={"addressing_style": "path"})

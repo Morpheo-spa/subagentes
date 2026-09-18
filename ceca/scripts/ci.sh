@@ -104,6 +104,18 @@ if [[ -d "$FRONTEND/node_modules" ]]; then
   step "npm run typecheck" run_npm typecheck
   step "npm run lint" run_npm lint
   step "vitest" bash -c "cd '$FRONTEND' && npx --no-install vitest run"
+
+  # --- Against a running deployment, in a real browser ------------------------
+  # frontend/e2e drives the SPA in Chromium: session and cookie, site switch,
+  # DECA generation, uploads, the public viewer on a phone viewport, printing,
+  # permissions, axe accessibility in light and dark, and responsive layout.
+  # CI starts Vite in front of the API for it; locally, point E2E_BASE_URL at
+  # your dev server (the demo tenant must be seeded).
+  if [[ -n "${E2E_BASE_URL:-}" ]]; then
+    step "playwright e2e against ${E2E_BASE_URL}" bash -c "cd '$FRONTEND' && npx --no-install playwright test -c e2e/playwright.config.ts"
+  else
+    skip "playwright e2e" "E2E_BASE_URL not set"
+  fi
 else
   skip "frontend" "node_modules missing, run npm ci in frontend/"
 fi

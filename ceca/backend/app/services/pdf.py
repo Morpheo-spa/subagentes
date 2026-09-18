@@ -46,6 +46,11 @@ TEXT_LAYER_MIN_CHARS = 24
 MAX_PDF_PAGES = 200
 #: Ceiling on the cross-reference table we are willing to resolve.
 MAX_PDF_OBJECTS = 50_000
+#: Inflated bytes of content stream on one probed page. pypdf tokenises a
+#: content stream in pure Python at roughly 6 µs per operator before any hook
+#: runs, so this is the only thing that bounds that phase. A dense page of
+#: text is tens of KB; 3 MB is a page nobody typed.
+MAX_PAGE_CONTENT_BYTES = 3 * 1024 * 1024
 #: Wall clock one file gets inside the worker thread.
 PDF_WORK_SECONDS = 10.0
 #: Extra slack before the caller stops waiting for that thread.
@@ -97,29 +102,32 @@ class RenderedPdf:
 
 _FIELDS_PATH = Path(__file__).resolve().parent.parent / "i18n" / "deca_fields.json"
 
+#: Spanish carries its accents. The base fonts are the standard Helvetica
+#: family, whose WinAnsi encoding covers Latin-1, so "electrónico" needs no
+#: font registration - the stripped spellings were a habit, not a constraint.
 _TEXT: dict[str, dict[str, str]] = {
     "title": {
-        "es": "Documento electronico de Control Administrativo (DeCA)",
+        "es": "Documento electrónico de Control Administrativo (DeCA)",
         "en": "Electronic Administrative Control Document (DeCA)",
     },
     "site": {"es": "Centro emisor", "en": "Issuing site"},
     "document_id": {"es": "Identificador", "en": "Identifier"},
-    "revision": {"es": "Revision", "en": "Revision"},
+    "revision": {"es": "Revisión", "en": "Revision"},
     "issued_at": {"es": "Emitido el", "en": "Issued on"},
     "verify": {
-        "es": "Verifique este documento escaneando el codigo QR.",
+        "es": "Verifique este documento escaneando el código QR.",
         "en": "Verify this document by scanning the QR code.",
     },
     "superseded_title": {
         "es": "Datos sustituidos",
         "en": "Superseded data",
     },
-    "not_valid": {"es": "NO VALIDO", "en": "NOT VALID"},
+    "not_valid": {"es": "NO VÁLIDO", "en": "NOT VALID"},
     "change_reason": {"es": "Motivo del cambio", "en": "Reason for the change"},
     "legal_note": {
         "es": (
-            "Documento de control del transporte publico de mercancias por carretera, "
-            "art. 6 Orden FOM/2861/2012 y Resolucion de 5 de junio de 2026."
+            "Documento de control del transporte público de mercancías por carretera, "
+            "art. 6 Orden FOM/2861/2012 y Resolución de 5 de junio de 2026."
         ),
         "en": (
             "Control document for the public road carriage of goods, art. 6 Order "
@@ -135,9 +143,23 @@ PAGE_WIDTH: float = A4[0]
 PAGE_HEIGHT: float = A4[1]
 MARGIN = 18 * mm
 QR_SIZE = 34 * mm
-LABEL_WIDTH = 62 * mm
 BODY_FONT = "Helvetica"
 BOLD_FONT = "Helvetica-Bold"
+
+#: A field is drawn as its label on one line and its value wrapped underneath,
+#: never side by side: a two-column layout put a 62 mm ceiling on the label,
+#: and "Cargador contractual — nombre o razón social" did not fit, so it ran
+#: straight into the value. Stacking makes the layout independent of how long
+#: the catalogue decides a label is.
+LABEL_SIZE = 8.0
+LABEL_LEADING = 10.0
+VALUE_SIZE = 9.5
+VALUE_LEADING = 12.0
+STRUCK_SIZE = 8.5
+STRUCK_LEADING = 10.0
+ROW_GAP = 3.0 * mm
+#: The body never goes below this: the two-line legal note sits under it.
+BODY_FLOOR = MARGIN + 10 * mm
 
 
 def is_pdf(data: bytes) -> bool:
@@ -232,25 +254,91 @@ def _real_page_count(reader: PdfReader) -> int:
         return 0
 
 
+class _EnoughTextError(Exception):
+    """Raised from inside pypdf to stop extracting once the answer is known."""
+
+
+def _timeout(filename: str) -> DomainError:
+    return DomainError(
+        "PDF_ANALYSIS_TIMEOUT",
+        status_code=422,
+        filename=filename,
+        seconds=int(PDF_WORK_SECONDS),
+    )
+
+
 def _probe_text(reader: PdfReader, pages: int, deadline: float, filename: str) -> bool:
-    """False means the file is a scan or a photo, i.e. not a valid DeCA."""
+    """False means the file is a scan or a photo, i.e. not a valid DeCA.
+
+    The deadline is checked between pages *and* between operators of a content
+    stream. A single page can hold hundreds of thousands of ``Tj`` operators
+    in a 70 KB file, and pypdf walks them in pure Python without ever giving
+    the GIL back; a check only between pages left that thread at 100 % CPU for
+    minutes after the request had already been answered (audit N-02). The same
+    hook stops early once enough text has been seen, so a legitimate file with
+    a lot of text costs less, not more.
+    """
     characters = 0
     for index in range(min(TEXT_PROBE_PAGES, pages)):
         if time.monotonic() > deadline:
-            raise DomainError(
-                "PDF_ANALYSIS_TIMEOUT",
-                status_code=422,
-                filename=filename,
-                seconds=int(PDF_WORK_SECONDS),
-            )
-        try:
-            extracted = reader.pages[index].extract_text() or ""
-        except Exception:
-            return False
-        characters += len("".join(extracted.split()))
+            raise _timeout(filename)
+        seen = _text_on_page(reader, index, deadline, filename, TEXT_LAYER_MIN_CHARS - characters)
+        if seen is None:
+            return True
+        characters += seen
         if characters >= TEXT_LAYER_MIN_CHARS:
             return True
     return False
+
+
+def _text_on_page(
+    reader: PdfReader, index: int, deadline: float, filename: str, needed: int
+) -> int | None:
+    """Characters of text on one page, or None once ``needed`` have been seen."""
+    seen = 0
+
+    def before_operand(*_: Any) -> None:
+        if time.monotonic() > deadline:
+            raise _timeout(filename)
+
+    def on_text(text: str, *_: Any) -> None:
+        nonlocal seen
+        seen += len("".join(text.split()))
+        if seen >= needed:
+            raise _EnoughTextError
+
+    try:
+        page = reader.pages[index]
+        _reject_oversized_content(page, filename)
+        page.extract_text(visitor_operand_before=before_operand, visitor_text=on_text)
+    except _EnoughTextError:
+        return None
+    except DomainError:
+        raise
+    except Exception:
+        return 0
+    return seen
+
+
+def _reject_oversized_content(page: Any, filename: str) -> None:
+    """Refuse a page whose content stream, inflated, is beyond anything real.
+
+    Decompression is C and fast; tokenising the result is Python and is not,
+    and it happens before the operator hook gets a say (audit N-02).
+    """
+    try:
+        contents = page.get_contents()
+        size = 0 if contents is None else len(contents.get_data())
+    except Exception:
+        return
+    if size > MAX_PAGE_CONTENT_BYTES:
+        raise DomainError(
+            "PDF_PAGE_TOO_COMPLEX",
+            status_code=422,
+            filename=filename,
+            kilobytes=size // 1024,
+            max_kilobytes=MAX_PAGE_CONTENT_BYTES // 1024,
+        )
 
 
 def _metadata_fields(reader: PdfReader) -> tuple[str, ...]:
@@ -279,8 +367,10 @@ async def _offloaded[ResultT](work: Callable[[], ResultT], *, filename: str) -> 
     """Run PDF work off the loop, and stop waiting for it if it misbehaves.
 
     The thread cannot be killed - Python has no such button - so the timeout
-    frees the request and the loop, not the CPU. The ceilings inside the
-    synchronous functions are what keep that thread from running away.
+    frees the request and the loop, not the CPU. What stops the thread itself
+    is the deadline the synchronous functions check between pages and between
+    content-stream operators (:func:`_probe_text`); this outer timeout is only
+    the grace the request gives that check to fire.
     """
     try:
         async with asyncio.timeout(PDF_WORK_SECONDS + OFFLOAD_GRACE_SECONDS):
@@ -450,7 +540,7 @@ def _ordered_items(values: dict[str, Any], language: str) -> list[tuple[str, str
 
 def _format_value(value: Any) -> str:
     if isinstance(value, bool):
-        return "si" if value else "no"
+        return "sí" if value else "no"
     text = str(value)
     if len(text) > MAX_RENDERED_VALUE_CHARS:
         return text[:MAX_RENDERED_VALUE_CHARS] + "..."
@@ -499,8 +589,7 @@ def _draw_fields(
     pdf: pdfcanvas.Canvas, values: dict[str, Any], cursor: float, language: str
 ) -> float:
     for label, value in _ordered_items(values, language):
-        cursor = _row(pdf, label, value, cursor)
-        cursor = _page_break(pdf, cursor, language)
+        cursor = _row(pdf, label, value, cursor, language=language)
     return cursor
 
 
@@ -522,11 +611,12 @@ def _draw_superseded(
 
     for label, value in _ordered_items(superseded, language):
         cursor = _struck_row(pdf, label, value, cursor, language)
-        cursor = _page_break(pdf, cursor, language)
 
     if change_reason:
         cursor -= 3 * mm
-        cursor = _row(pdf, _say("change_reason", language), change_reason, cursor)
+        cursor = _row(
+            pdf, _say("change_reason", language), change_reason, cursor, language=language
+        )
     return cursor
 
 
@@ -546,31 +636,74 @@ def _row(
     cursor: float,
     *,
     width: float | None = None,
+    language: str | None = None,
 ) -> float:
-    value_width = (width or PAGE_WIDTH - 2 * MARGIN) - LABEL_WIDTH
-    pdf.setFont(BOLD_FONT, 9)
-    pdf.drawString(MARGIN, cursor, label)
-    bottom = _wrapped(pdf, value, MARGIN + LABEL_WIDTH, cursor, value_width, BODY_FONT, 9.5, 12)
-    return bottom - 3 * mm
+    """One field: the label on its own line(s), the value wrapped below it.
+
+    Nothing shares a baseline with anything else, so no label can overlap a
+    value whatever the catalogue calls the field. With ``language`` the row
+    flows across pages - the label stays with the first value line, the rest
+    breaks wherever it must; without it (the header, drawn next to the QR) it
+    is laid out on the current page only.
+    """
+    row_width = width or PAGE_WIDTH - 2 * MARGIN
+    label_lines = simpleSplit(label, BOLD_FONT, LABEL_SIZE, row_width)
+    value_lines = simpleSplit(value, BODY_FONT, VALUE_SIZE, row_width)
+    if language is not None:
+        needed = len(label_lines) * LABEL_LEADING + VALUE_LEADING
+        cursor = _ensure_room(pdf, cursor, needed, language)
+    cursor = _lines(pdf, label_lines, cursor, BOLD_FONT, LABEL_SIZE, LABEL_LEADING, language)
+    cursor = _lines(pdf, value_lines, cursor, BODY_FONT, VALUE_SIZE, VALUE_LEADING, language)
+    return cursor - ROW_GAP
 
 
 def _struck_row(
     pdf: pdfcanvas.Canvas, label: str, value: str, cursor: float, language: str
 ) -> float:
-    pdf.setFont(BOLD_FONT, 9)
-    pdf.drawString(MARGIN, cursor, label)
-    pdf.setFont(BODY_FONT, 9.5)
-    text = f"{value}  -  {_say('not_valid', language)}"
-    pdf.drawString(MARGIN + LABEL_WIDTH, cursor, text)
-    text_width = pdf.stringWidth(text, BODY_FONT, 9.5)
-    pdf.setLineWidth(0.7)
-    pdf.line(
-        MARGIN + LABEL_WIDTH,
-        cursor + 3,
-        MARGIN + LABEL_WIDTH + text_width,
-        cursor + 3,
+    """A superseded field: NOT VALID next to its label, every value line struck."""
+    row_width = PAGE_WIDTH - 2 * MARGIN
+    label_lines = simpleSplit(
+        f"{label} — {_say('not_valid', language)}", BOLD_FONT, LABEL_SIZE, row_width
     )
-    return cursor - 8 * mm
+    value_lines = simpleSplit(value, BODY_FONT, STRUCK_SIZE, row_width)
+    cursor = _ensure_room(pdf, cursor, len(label_lines) * LABEL_LEADING + STRUCK_LEADING, language)
+    cursor = _lines(pdf, label_lines, cursor, BOLD_FONT, LABEL_SIZE, LABEL_LEADING, language)
+    pdf.setLineWidth(0.7)
+    for line in value_lines:
+        cursor = _ensure_room(pdf, cursor, STRUCK_LEADING, language)
+        pdf.setFont(BODY_FONT, STRUCK_SIZE)
+        pdf.drawString(MARGIN, cursor, line)
+        pdf.line(
+            MARGIN, cursor + 3, MARGIN + pdf.stringWidth(line, BODY_FONT, STRUCK_SIZE), cursor + 3
+        )
+        cursor -= STRUCK_LEADING
+    return cursor - ROW_GAP
+
+
+def _lines(
+    pdf: pdfcanvas.Canvas,
+    lines: list[str],
+    cursor: float,
+    font: str,
+    size: float,
+    leading: float,
+    language: str | None,
+) -> float:
+    """Draw pre-split lines downwards, breaking the page between them if allowed."""
+    for line in lines:
+        if language is not None:
+            cursor = _ensure_room(pdf, cursor, leading, language)
+        pdf.setFont(font, size)
+        pdf.drawString(MARGIN, cursor, line)
+        cursor -= leading
+    return cursor
+
+
+def _ensure_room(pdf: pdfcanvas.Canvas, cursor: float, needed: float, language: str) -> float:
+    """The cursor, on this page or the next, with ``needed`` points above the floor."""
+    if cursor - needed >= BODY_FLOOR:
+        return cursor
+    return _page_break(pdf, language)
 
 
 def _wrapped(
@@ -591,10 +724,8 @@ def _wrapped(
     return cursor
 
 
-def _page_break(pdf: pdfcanvas.Canvas, cursor: float, language: str) -> float:
+def _page_break(pdf: pdfcanvas.Canvas, language: str) -> float:
     """Start a new page, unless that would turn a delivery note into a book."""
-    if cursor > MARGIN + 24 * mm:
-        return cursor
     if pdf.getPageNumber() >= MAX_RENDER_PAGES:
         raise DomainError("DECA_RENDER_PAGE_LIMIT", status_code=422, max_pages=MAX_RENDER_PAGES)
     _draw_footer(pdf, language)

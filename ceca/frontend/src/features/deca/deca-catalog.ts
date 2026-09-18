@@ -4,25 +4,35 @@
  * OJO: `GET /deca/fields` NO devuelve ningun grupo; lo unico que ordena es
  * `sort_order` (ver `DecaFieldRead` en `backend/app/schemas/deca.py`). Pero el
  * art. 6 exige identificar al cargador contractual y al transportista efectivo
- * "de forma expresa y diferenciada", asi que la UI tiene que separarlos si o si.
+ * "de forma expresa y diferenciada", asi que la UI tiene que separarlos si o si,
+ * y `deca-form.md` pide ademas envio, mercancia y observaciones aparte.
  *
- * Solucion sin inventarse catalogo: los dos bloques de partes se reconocen por
- * el prefijo del `code`, igual que hace el backend en `deca.py`
- * (`PARTY_PREFIXES`), y TODO lo demas cae en un unico bloque de envio, por
- * `sort_order`. Asi un campo nuevo del catalogo aparece siempre, aunque este
- * front no sepa nada de el.
+ * Solucion sin inventarse catalogo: cada bloque se reconoce por el prefijo del
+ * `code`, igual que hace el backend en `deca.py` (`PARTY_PREFIXES`), y TODO lo
+ * demas cae en el bloque de envio, por `sort_order`. Asi un campo nuevo del
+ * catalogo aparece siempre, aunque este front no sepa nada de el.
  */
 import type { DecaFieldRead } from '@/lib/types'
 import { PARTY_PREFIXES } from './deca-validation'
 
-export type DecaBlock = (typeof PARTY_PREFIXES)[number] | 'envio'
+/** Bloques no-parte, tambien por prefijo del `code` (deca-form.md). */
+const TOPIC_PREFIXES = ['mercancia', 'observaciones'] as const
 
-export const BLOCK_ORDER: DecaBlock[] = [...PARTY_PREFIXES, 'envio']
+export type DecaBlock =
+  | (typeof PARTY_PREFIXES)[number]
+  | 'envio'
+  | (typeof TOPIC_PREFIXES)[number]
+
+export const BLOCK_ORDER: DecaBlock[] = [...PARTY_PREFIXES, 'envio', ...TOPIC_PREFIXES]
 
 /** El bloque de un campo, deducido de su `code`. */
 export function blockOf(field: DecaFieldRead): DecaBlock {
-  const prefix = PARTY_PREFIXES.find((party) => field.code.startsWith(`${party}_`))
-  return prefix ?? 'envio'
+  const party = PARTY_PREFIXES.find((prefix) => field.code.startsWith(`${prefix}_`))
+  if (party) return party
+  const topic = TOPIC_PREFIXES.find(
+    (prefix) => field.code === prefix || field.code.startsWith(`${prefix}_`),
+  )
+  return topic ?? 'envio'
 }
 
 export interface DecaFieldBlock {

@@ -149,6 +149,14 @@
       "es": "Este trabajo de impresión ya está cerrado.",
       "en": "This print job is already closed."
     },
+    "PRINT_NOT_A_DECA": {
+      "es": "«{filename}» es un escaneo o una foto y no puede ser un DeCA válido, así que no se imprime una etiqueta con QR para él.",
+      "en": "\"{filename}\" is a scan or a photo and cannot be a valid DeCA, so no QR label is printed for it."
+    },
+    "PRINT_DOCUMENT_UNAVAILABLE": {
+      "es": "«{filename}» ha sido sustituido o retirado y ya no se puede imprimir su etiqueta.",
+      "en": "\"{filename}\" has been superseded or withdrawn; its label can no longer be printed."
+    },
     "QUOTA_DOCUMENTS_EXCEEDED": {
       "es": "Has alcanzado el límite de {limit} documentos de tu plan para {period}.",
       "en": "You have reached your plan limit of {limit} documents for {period}."
@@ -273,6 +281,10 @@
       "es": "No puedes conceder el rol «{role}»: incluye permisos que tú no tienes.",
       "en": "You cannot grant the \"{role}\" role: it includes permissions you do not have."
     },
+    "USER_OUTRANKS_ACTOR": {
+      "es": "No puedes cambiar la contraseña, el estado ni los accesos de un usuario con más alcance que tú.",
+      "en": "You cannot change the password, status or access of a user whose scope exceeds yours."
+    },
     "PERMISSION_ESCALATION_FORBIDDEN": {
       "es": "No puedes conceder permisos que tú no tienes: {permissions}.",
       "en": "You cannot grant permissions you do not hold: {permissions}."
@@ -296,6 +308,10 @@
     "PDF_TOO_MANY_PAGES": {
       "es": "El PDF «{filename}» declara {pages} páginas y el máximo admitido es {max_pages}.",
       "en": "The PDF '{filename}' declares {pages} pages; the maximum accepted is {max_pages}."
+    },
+    "PDF_PAGE_TOO_COMPLEX": {
+      "es": "Una página del PDF «{filename}» ocupa {kilobytes} KB de contenido y el máximo admitido es {max_kilobytes} KB.",
+      "en": "A page of the PDF '{filename}' holds {kilobytes} KB of content; the maximum accepted is {max_kilobytes} KB."
     },
     "PDF_TOO_COMPLEX": {
       "es": "El PDF «{filename}» contiene {objects} objetos y el máximo admitido es {max_objects}.",

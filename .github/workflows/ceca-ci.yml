@@ -60,12 +60,17 @@ jobs:
       BILLING_ENABLED: "false"
       # The smoke test drives a real API started below, with the production
       # posture: the SSRF guard on and no trusted proxy in front.
-      PUBLIC_BASE_URL: http://127.0.0.1:8000
+      # Vite fronts the API in CI, exactly as a developer's browser sees it:
+      # one origin, the cookie refresh accepted, the /v/ proxy in play. The
+      # smoke test and the browser suite both go through it.
+      PUBLIC_BASE_URL: http://127.0.0.1:5173
       LOCAL_STORAGE_ROOT: /tmp/estampa-ci-storage
       ALLOW_PRIVATE_STORAGE_ENDPOINTS: "false"
       TRUSTED_PROXY_COUNT: "0"
-      SMOKE_BASE_URL: http://127.0.0.1:8000
-      SMOKE_ORIGIN: http://127.0.0.1:8000
+      SMOKE_BASE_URL: http://127.0.0.1:5173
+      SMOKE_ORIGIN: http://127.0.0.1:5173
+      E2E_BASE_URL: http://127.0.0.1:5173
+      VITE_DEV_API_PROXY: http://127.0.0.1:8000
 
     steps:
       - uses: actions/checkout@v4
@@ -132,9 +137,37 @@ jobs:
         # node_modules is missing, so a failed install would pass unnoticed.
         run: npm ci --no-audit --no-fund
 
+      - name: Install Chromium for Playwright
+        working-directory: ceca/frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Start Vite in front of the API
+        working-directory: ceca/frontend
+        run: |
+          nohup npm run dev -- --host 127.0.0.1 --port 5173 --strictPort > /tmp/estampa-vite.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:5173/ 2>/dev/null; then
+              echo "Vite ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Vite did not start; log follows"; cat /tmp/estampa-vite.log; exit 1
+
       - name: Run the gate
         run: bash scripts/ci.sh
 
-      - name: API log
+      - name: API and Vite logs
         if: failure()
-        run: cat /tmp/estampa-api.log || true
+        run: |
+          echo "::group::API"; cat /tmp/estampa-api.log || true; echo "::endgroup::"
+          echo "::group::Vite"; cat /tmp/estampa-vite.log || true; echo "::endgroup::"
+
+      - name: Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            ceca/frontend/playwright-report
+            ceca/frontend/e2e/test-results
+          if-no-files-found: ignore
