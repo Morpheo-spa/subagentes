@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.cache import close_redis
 from app.config import get_settings
 from app.deps import negotiate_language
 from app.errors import DomainError, error_detail, localised_message
@@ -44,6 +45,27 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         return response
 
 
+PUBLIC_VIEWER_PREFIX = "/v/"
+
+#: Applied to every public-viewer response, success or failure. An error page is
+#: just as indexable as a document page, so the headers cannot live in the router.
+PUBLIC_VIEWER_HEADERS = {
+    "X-Robots-Tag": "noindex, nofollow",
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+class PublicViewerHeadersMiddleware(BaseHTTPMiddleware):
+    """Keeps the QR viewer out of search engines and caches, including on 404."""
+
+    async def dispatch(self, request: Request, call_next):  # noqa: ANN001, ANN201
+        response = await call_next(request)
+        if request.url.path.startswith(PUBLIC_VIEWER_PREFIX):
+            response.headers.update(PUBLIC_VIEWER_HEADERS)
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings.require_billing_config()
@@ -51,7 +73,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "estampa starting", extra={"environment": settings.environment,
                                    "billing_enabled": settings.billing_enabled}
     )
-    yield
+    try:
+        yield
+    finally:
+        await close_redis()
 
 
 def create_app() -> FastAPI:
@@ -64,6 +89,7 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(PublicViewerHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.public_base_url],

@@ -121,6 +121,18 @@
       "es": "La cola de impresión está vacía.",
       "en": "The print queue is empty."
     },
+    "PRINT_QUEUE_ITEM_NOT_FOUND": {
+      "es": "Esa etiqueta ya no está en tu cola de impresión.",
+      "en": "That label is no longer in your print queue."
+    },
+    "PRINT_COPIES_INVALID": {
+      "es": "El número de copias ({copies}) debe ser al menos 1.",
+      "en": "The number of copies ({copies}) must be at least 1."
+    },
+    "PRINT_JOB_NOT_FOUND": {
+      "es": "El trabajo de impresión no existe.",
+      "en": "The print job does not exist."
+    },
     "PRINT_TEMPLATE_UNKNOWN": {
       "es": "La plantilla de etiqueta «{template_code}» no existe.",
       "en": "Label template \"{template_code}\" does not exist."
@@ -157,6 +169,10 @@
       "es": "El proveedor de pagos ha devuelto un error. Inténtalo de nuevo en unos minutos.",
       "en": "The payment provider returned an error. Try again in a few minutes."
     },
+    "BILLING_WEBHOOK_INVALID": {
+      "es": "La notificación del proveedor de pagos no tiene una firma válida.",
+      "en": "The payment provider notification is not correctly signed."
+    },
     "SUBSCRIPTION_NOT_FOUND": {
       "es": "Esta empresa no tiene suscripción.",
       "en": "This company has no subscription."
@@ -184,6 +200,34 @@
     "INTERNAL_ERROR": {
       "es": "Se ha producido un error inesperado. Ya lo estamos mirando.",
       "en": "An unexpected error occurred. We are looking into it."
+    },
+    "SITE_NOT_FOUND": {
+      "es": "El centro no existe.",
+      "en": "The site does not exist."
+    },
+    "SITE_PREFIX_TAKEN": {
+      "es": "Ya hay un centro con el prefijo «{site_prefix}».",
+      "en": "A site with prefix \"{site_prefix}\" already exists."
+    },
+    "USER_NOT_FOUND": {
+      "es": "El usuario no existe.",
+      "en": "The user does not exist."
+    },
+    "EMAIL_ALREADY_EXISTS": {
+      "es": "Ya hay un usuario con el email {email}.",
+      "en": "A user with the email {email} already exists."
+    },
+    "STORAGE_BACKEND_NOT_FOUND": {
+      "es": "El almacenamiento no existe.",
+      "en": "The storage backend does not exist."
+    },
+    "RETENTION_POLICY_NOT_FOUND": {
+      "es": "La política de retención no existe.",
+      "en": "The retention policy does not exist."
+    },
+    "TOKEN_REVOKED": {
+      "es": "Tu sesión se ha cerrado. Vuelve a entrar.",
+      "en": "Your session was closed. Please sign in again."
     }
   }
 }

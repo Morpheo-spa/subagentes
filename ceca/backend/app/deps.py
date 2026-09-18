@@ -11,6 +11,7 @@ from fastapi import Depends, Header, Request
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import reject_if_blacklisted
 from app.db import get_session
 from app.errors import DomainError, PermissionDeniedError
 from app.models.base import TenantScoped
@@ -77,6 +78,9 @@ def _bearer_token(request: Request) -> str:
 
 async def get_current_context(request: Request) -> TenantContext:
     payload: dict[str, Any] = decode_token(_bearer_token(request))
+    # A logged-out or rotated token is still cryptographically valid, so the
+    # blacklist is the only thing that stops it. Check before trusting any claim.
+    await reject_if_blacklisted(payload)
     tenant_id = payload.get("tenant_id")
     if not tenant_id:
         raise DomainError("NO_SITE_SELECTED", status_code=403)
