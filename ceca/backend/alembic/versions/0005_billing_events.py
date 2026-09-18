@@ -40,7 +40,10 @@ def upgrade() -> None:
         sa.Column("id", sa.String(length=255), nullable=False),
         sa.Column("type", sa.String(length=120), nullable=False),
         sa.Column(
-            "received_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "received_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column("processed_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id", name="pk_billing_events"),
