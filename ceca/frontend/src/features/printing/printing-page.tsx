@@ -18,12 +18,12 @@ import {
 import { Button } from '@/components/ui/button'
 import { FormDescription, FormField, FormLabel, useFormControlProps } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { Label as FieldLabel } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -33,7 +33,7 @@ import { ApiError } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { formatNumber } from '@/lib/format'
 import { useI18n } from '@/lib/i18n'
-import type { LabelTemplateRead, PrintLayout, QueueItemRead } from '@/lib/types'
+import type { LabelTemplateRead, QueueItemRead } from '@/lib/types'
 import { paginate, PrintSheet, slotsPerPage } from './print-sheet'
 import { QueueList } from './queue-list'
 import {
@@ -54,6 +54,14 @@ import {
  */
 const PRINTER_NAME_KEY = 'estampa.printerName'
 const TEMPLATE_KEY = 'estampa.template'
+
+//: A template already states whether it prints one label per page or a grid,
+//: so the list is grouped by that instead of asking twice.
+const LAYOUT_ORDER = ['single', 'sheet'] as const
+const LAYOUT_LABEL: Record<(typeof LAYOUT_ORDER)[number], string> = {
+  single: 'printing.modeSingle',
+  sheet: 'printing.modeGrid',
+}
 
 function TextField({
   label,
@@ -113,7 +121,6 @@ export default function PrintingPage() {
   const confirmJob = useConfirmPrintJob()
 
   const [items, setItems] = useState<QueueItemRead[]>([])
-  const [layout, setLayout] = useState<PrintLayout>('sheet')
   const [templateCode, setTemplateCode] = useState('')
   const [printerName, setPrinterName] = useState('')
   const [startPosition, setStartPosition] = useState(1)
@@ -138,8 +145,16 @@ export default function PrintingPage() {
   }, [])
 
   const available = useMemo(
-    () => (templates.data?.items ?? []).filter((entry) => (entry.layout ?? 'sheet') === layout),
-    [templates.data, layout],
+    () => templates.data?.items ?? [],
+    [templates.data],
+  )
+
+  const byLayout = useMemo(
+    () => ({
+      single: available.filter((entry) => (entry.layout ?? 'sheet') === 'single'),
+      sheet: available.filter((entry) => (entry.layout ?? 'sheet') === 'sheet'),
+    }),
+    [available],
   )
 
   const template: LabelTemplateRead | undefined =
@@ -249,23 +264,6 @@ export default function PrintingPage() {
                 />
               </FormField>
 
-              <fieldset className="flex flex-col gap-2">
-                <legend className="text-sm font-medium">{t('printing.mode')}</legend>
-                <RadioGroup
-                  value={layout}
-                  onValueChange={(value) => setLayout(value as PrintLayout)}
-                >
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="single" id="mode-single" />
-                    <FieldLabel htmlFor="mode-single">{t('printing.modeSingle')}</FieldLabel>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="sheet" id="mode-sheet" />
-                    <FieldLabel htmlFor="mode-sheet">{t('printing.modeGrid')}</FieldLabel>
-                  </div>
-                </RadioGroup>
-              </fieldset>
-
               <FormField>
                 <FormLabel>{t('printing.template')}</FormLabel>
                 <Select
@@ -283,11 +281,18 @@ export default function PrintingPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {available.map((entry) => (
-                      <SelectItem key={entry.code} value={entry.code}>
-                        {pick(entry, 'name') || entry.code}
-                      </SelectItem>
-                    ))}
+                    {LAYOUT_ORDER.map((group) =>
+                      byLayout[group].length ? (
+                        <SelectGroup key={group}>
+                          <SelectLabel>{t(LAYOUT_LABEL[group])}</SelectLabel>
+                          {byLayout[group].map((entry) => (
+                            <SelectItem key={entry.code} value={entry.code}>
+                              {pick(entry, 'name') || entry.code}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ) : null,
+                    )}
                   </SelectContent>
                 </Select>
               </FormField>
