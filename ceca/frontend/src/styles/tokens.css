@@ -28,7 +28,9 @@
   /* Variantes de TEXTO sobre fondo claro, ajustadas a >= 4.5:1.
      #16A34A (3.0:1) y #D97706 (3.2:1) no llegan como texto sobre blanco. */
   --estampa-accent-text: #15803d; /* 5.0:1 sobre #FFFFFF */
-  --estampa-warning-text: #b45309; /* 5.0:1 sobre #FFFFFF */
+  /* Al quitar la caja, el aviso amarillo pasa a leerse tambien sobre `muted`
+     (fila de tabla en hover), donde #B45309 se quedaba en 4.31:1. */
+  --estampa-warning-text: #92400e; /* 7.1:1 sobre #FFFFFF, 6.1:1 sobre muted */
   --estampa-destructive-text: #b91c1c; /* 7.0:1 sobre #FFFFFF */
 
   /* Fondos suaves para badges y avisos (texto = *-text encima) */

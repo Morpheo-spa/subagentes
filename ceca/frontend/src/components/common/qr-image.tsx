@@ -46,7 +46,7 @@ export function QrImage({
     return (
       <div
         className={cn(
-          'flex items-center justify-center rounded-sm border border-dashed border-border',
+          'flex items-center justify-center rounded-md border border-dashed border-border',
           className,
         )}
         style={{ width: size, height: size }}

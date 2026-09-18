@@ -82,7 +82,17 @@ export default function DocumentsPage() {
 
   return (
     <div className="flex flex-col gap-6 pb-24">
-      <PageHeader title={t('documents.title')} description={t('documents.subtitle')} />
+      {/* El CSV exporta LO FILTRADO, no la seleccion: su sitio es la cabecera
+          de la pagina, no la barra de acciones sobre la seleccion. */}
+      <PageHeader
+        title={t('documents.title')}
+        actions={
+          <Button variant="outline" onClick={exportCsv}>
+            <DownloadSimple size={20} aria-hidden="true" />
+            {t('documents.exportCsv')}
+          </Button>
+        }
+      />
 
       <DocumentsFilters
         params={params}
@@ -102,7 +112,6 @@ export default function DocumentsPage() {
         <EmptyState
           icon={FileDashed}
           title={t('documents.emptyTitle')}
-          description={t('documents.emptyBody')}
           action={
             <Button asChild>
               <Link to="/upload">{t('documents.emptyCta')}</Link>
@@ -159,10 +168,6 @@ export default function DocumentsPage() {
               <Button size="sm" onClick={() => addToQueue(selectedIds)} disabled={queue.isPending}>
                 <Printer size={16} aria-hidden="true" />
                 {t('documents.addToQueue')}
-              </Button>
-              <Button size="sm" variant="outline" onClick={exportCsv}>
-                <DownloadSimple size={16} aria-hidden="true" />
-                {t('documents.exportCsv')}
               </Button>
               <Button size="sm" variant="destructive" onClick={() => setWithdrawOpen(true)}>
                 <Prohibit size={16} aria-hidden="true" />

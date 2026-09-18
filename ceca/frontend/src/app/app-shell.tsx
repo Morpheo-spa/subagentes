@@ -158,9 +158,9 @@ function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-2">
-          <User size={18} aria-hidden="true" />
+          <User size={16} aria-hidden="true" />
           <span className="hidden max-w-32 truncate sm:inline">{user.full_name}</span>
-          <CaretDown size={14} aria-hidden="true" />
+          <CaretDown size={16} aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -205,7 +205,7 @@ export function AppShell() {
           aria-label={t('shell.openMenu')}
           onClick={() => setMobileOpen(true)}
         >
-          <List size={20} aria-hidden="true" />
+          <List size={16} aria-hidden="true" />
         </Button>
         <Button
           variant="ghost"
@@ -215,7 +215,7 @@ export function AppShell() {
           aria-pressed={collapsed}
           onClick={() => setCollapsed(!collapsed)}
         >
-          <SidebarSimple size={20} aria-hidden="true" />
+          <SidebarSimple size={16} aria-hidden="true" />
         </Button>
         <span className="font-bold tracking-tight">{t('app.name')}</span>
         <div className="ml-auto flex items-center gap-2">

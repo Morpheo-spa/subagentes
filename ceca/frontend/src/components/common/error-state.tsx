@@ -11,11 +11,14 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   return (
     <div
       role="alert"
-      className="flex flex-col items-center gap-3 rounded-lg border border-destructive bg-destructive-surface px-6 py-10 text-center text-destructive-text"
+      className="flex flex-col items-center gap-3 rounded-md border border-destructive bg-destructive-surface px-6 py-10 text-center text-destructive-text"
     >
       <WarningCircle size={32} aria-hidden="true" />
-      <p className="text-lead font-semibold">{t('errors.title')}</p>
-      <p className="max-w-prose text-sm">{apiError?.message ?? t('errors.unexpected')}</p>
+      {/* Sin titulo generico encima: el mensaje de la API ya dice que ha
+          pasado, y el codigo se conserva para soporte. */}
+      <p className="max-w-prose text-base font-medium">
+        {apiError?.message ?? t('errors.unexpected')}
+      </p>
       {apiError ? (
         <p className="estampa-mono text-meta">{t('errors.code', { code: apiError.code })}</p>
       ) : null}

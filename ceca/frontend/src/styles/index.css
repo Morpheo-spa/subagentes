@@ -48,9 +48,9 @@
   --text-h2: var(--text-h2);
   --text-h1: var(--text-h1);
 
-  --radius-sm: calc(var(--radius) - 2px);
+  /* Un solo radio en toda la UI: 6px (MASTER §2). `rounded-full` queda solo
+     para lo que de verdad es un circulo (radio, barra de progreso). */
   --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
 }
 
 @layer base {
@@ -78,7 +78,7 @@
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius);
   }
 
   [hidden] {

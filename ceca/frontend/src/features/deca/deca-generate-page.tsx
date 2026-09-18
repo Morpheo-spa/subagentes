@@ -1,4 +1,3 @@
-import { FileText } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { ErrorState } from '@/components/common/error-state'
 import { PageHeader } from '@/components/common/page-header'
@@ -58,12 +57,9 @@ export default function DecaGeneratePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* El subtitulo ya dice que el PDF se genera desde los datos. Un segundo
+          bloque explicando lo mismo, con icono decorativo y marco, sobraba. */}
       <PageHeader title={t('deca.generateTitle')} description={t('deca.generateSubtitle')} />
-
-      <p className="rounded-md border border-border bg-muted p-4 text-sm text-muted-foreground">
-        <FileText size={16} aria-hidden="true" className="mr-2 inline align-text-bottom" />
-        {t('deca.nativeNotice')}
-      </p>
 
       {catalog.isPending ? (
         <div className="flex flex-col gap-4" aria-busy="true">

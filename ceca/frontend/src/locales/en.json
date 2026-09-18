@@ -33,7 +33,6 @@
       "name": "Name",
       "secretsNotice": "Credentials are stored encrypted and are never shown, not even masked. To change them they must be entered again."
     },
-    "subtitle": "Sites, users, storage and retention.",
     "tabs": {
       "retention": "Retention",
       "sites": "Sites",
@@ -92,7 +91,6 @@
     },
     "storageUsed": "Storage used: {size}",
     "subscription": "Subscription",
-    "subtitle": "Plan, subscription and usage for this site.",
     "title": "Billing",
     "usage": "Usage"
   },
@@ -141,7 +139,6 @@
     "generatedToast": "DeCA generated successfully",
     "incompleteNotice": "{count} required fields are missing: it will be saved as incomplete.",
     "legalRef": "(art. {ref})",
-    "nativeNotice": "The PDF is generated natively from this data, with the QR embedded. It is the only fully compliant route: a scan does not qualify.",
     "openInDocuments": "Open in Documents",
     "partiesNotDistinct": "The contracting shipper and the actual carrier cannot share the same tax ID.",
     "revisionSaved": "Revision created",
@@ -184,7 +181,6 @@
     "compliance": "Compliance",
     "copyPublicUrl": "Copy public URL",
     "editDeca": "Edit DeCA data",
-    "emptyBody": "Upload your first PDF and it will show up here with its QR.",
     "emptyCta": "Upload a PDF",
     "emptyTitle": "No documents yet",
     "expiresBefore": "Expires before",
@@ -203,7 +199,6 @@
     "print": "Print",
     "printedCopies": "{count} copies printed",
     "resetFilters": "Clear filters",
-    "revisionLabel": "Revision",
     "revisionN": "Revision {n}",
     "revokeBody": "The public link will stop working immediately. Document:",
     "revokeTitle": "Revoke the QR",
@@ -211,14 +206,11 @@
     "revoked": "QR revoked",
     "rowActions": "Actions for {name}",
     "search": "Search by name or GUID",
-    "searchHint": "Search covers the original name and the GUID.",
     "selectAll": "Select all documents",
     "selectOne": "Select {name}",
     "selectedCount": "{count} selected",
-    "sha256": "SHA-256",
     "size": "Size",
     "status": "Status",
-    "subtitle": "Find, reprint, review history or withdraw.",
     "superseded": "superseded",
     "tabs": {
       "history": "History",
@@ -242,7 +234,6 @@
     "forbiddenTitle": "No permission",
     "notFoundBody": "The address you opened does not exist.",
     "notFoundTitle": "Page not found",
-    "title": "Something went wrong",
     "unexpected": "An unexpected error occurred."
   },
   "nav": {
@@ -274,11 +265,10 @@
     "copiesCount": "{count} copies",
     "didItPrintBody": "If everything went well we clear the queue. If not, we keep it and mark the job as failed.",
     "didItPrintTitle": "Did it print correctly?",
-    "emptyBody": "Add documents from the list or right after an upload.",
     "emptyCta": "Go to Documents",
     "emptyTitle": "The queue is empty",
     "jobName": "Job name",
-    "jobNameHelp": "Just the label this job is recorded under. The printer itself is chosen in the system print dialog.",
+    "jobNameHelp": "Only the label this job is recorded under; the printer is chosen in the system dialog.",
     "jobRegistered": "Print job recorded",
     "markedFailed": "Job marked as failed",
     "mode": "Mode",
@@ -298,13 +288,11 @@
     "removed": "Removed from the queue",
     "settings": "Settings",
     "startPosition": "Start at position",
-    "subtitle": "Collect labels and print them in one go.",
     "summary": "{labels} labels · {pages} pages",
     "template": "Template",
     "title": "Print queue"
   },
   "public": {
-    "download": "Download the PDF",
     "issuedOn": "Issued on {date}",
     "openOrDownload": "Open or download",
     "pageOf": "Page {page} of {name}",
@@ -362,8 +350,6 @@
     "dropHint": "PDF only, up to {size} per file.",
     "dropTitle": "Drop your PDFs here",
     "duplicateWarning": "An identical file already exists, uploaded on {date}.",
-    "emptyBody": "Drop your PDFs or use the “Select files” button.",
-    "emptyTitle": "No files added yet",
     "errorCodes": {
       "DOCUMENT_IS_A_SCAN": "The PDF has no text layer: it is a scan.",
       "DOCUMENT_PROCESSING_FAILED": "Processing the document failed.",
@@ -395,7 +381,6 @@
     "summary": "{total} files · {ready} ready · {errors} failed",
     "title": "Upload PDFs",
     "uploadingPercent": "Uploading {percent}%",
-    "urlCopied": "Public URL copied",
     "view": "View document"
   }
 }

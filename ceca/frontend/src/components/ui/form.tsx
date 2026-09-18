@@ -126,7 +126,7 @@ export function FormErrorSummary({
       className="rounded-md border border-destructive bg-destructive-surface p-4 text-destructive-text"
     >
       <p className="flex items-center gap-2 font-semibold">
-        <WarningCircle size={20} aria-hidden="true" />
+        <WarningCircle size={16} aria-hidden="true" />
         {title}
       </p>
       <ul className="mt-2 list-inside list-disc space-y-1 text-sm">

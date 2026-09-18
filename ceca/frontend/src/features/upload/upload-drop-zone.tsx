@@ -39,7 +39,7 @@ export function UploadDropZone({
       onDragLeave={() => setDragging(false)}
       onDrop={handleDrop}
       className={cn(
-        'flex min-h-[200px] w-full flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-center transition-colors duration-200 ease-out',
+        'flex min-h-[200px] w-full flex-col items-center justify-center gap-3 rounded-md border-2 border-dashed p-6 text-center transition-colors duration-200 ease-out',
         dragging ? 'border-secondary bg-muted' : 'border-border bg-card',
       )}
     >

@@ -23,6 +23,22 @@
 - Reglas: grid 12 col, bordes 1px, sin sombras salvo overlays, una sola acción primaria por vista,
   radio 6px (no 0px: shadcn por defecto, botones táctiles), nada decorativo.
 
+Lo que "minimalista" significa aquí, en concreto (auditoría de 2026-09, aplicada al código):
+
+- **Un solo radio: 6px** (`--radius`, clase `rounded-md`). No hay `rounded-sm` ni `rounded-lg`.
+  `rounded-full` solo para lo que es de verdad un círculo (radio button, barra de progreso).
+- **Un solo peso de borde: 1px.** Excepciones vivas y justificadas: la zona de drop de la subida
+  (2px discontinuo, `pages/upload.md`) y el borde izquierdo de fila que caduca (`pages/documents.md`).
+- **Aviso en línea = icono + texto del color del estado. Sin caja.** Los fondos `*-surface` son
+  exclusivos de `Badge`; el marco se reserva a los bloques que *sustituyen* contenido (estado vacío,
+  estado de error). Un aviso dentro de una fila, un panel o un formulario no lleva marco ni relleno.
+- **Separación por aire, no por línea.** Nada de `Separator` dentro de un panel: el espacio ordena.
+  El componente `ui/separator` se eliminó por no tener ya ningún uso legítimo.
+- **Una sola acción primaria visible.** Lo secundario raro o destructivo (revocar, retirar) va a un
+  menú `DotsThree`, no a un botón permanente que compita con la acción principal.
+- **Sin texto de relleno.** Un `description` de cabecera que solo repite lo que ya se ve en pantalla
+  (las pestañas, las columnas, el CTA) se quita. Un `help` que no añade nada al label, también.
+
 ## 3. Color (tokens semánticos, nunca hex en componentes)
 
 Base: `colors.csv → E-signature / Document Workflow` ("trust navy + signature green + audit trail").
@@ -101,14 +117,25 @@ Density 7 → escala 8-48: `--space-1..6` = 4 · 8 · 12 · 16 · 24 · 32 · 48
 | Confirmación destructiva | `AlertDialog` | Borrar, retirar, revocar token. Botón destructivo a la derecha, texto con el nombre del objeto. |
 | Feedback | `Sonner` toast | Éxito breve (3 s). Error persistente con código y acción. Nunca silencio. |
 | Carga | `Skeleton` | Reservar espacio (CLS < 0.1). Sin spinner para < 300 ms. `aria-busy`. |
-| Vacío | Empty state propio | Icono + una frase + CTA (“Sube tu primer PDF”). |
+| Vacío | Empty state propio | Icono + **una** frase + CTA. Sin frase de apoyo bajo el título si el CTA ya lo dice. |
 | Estado | `Badge` | Siempre icono + texto. |
 | Ayuda | `Tooltip` | Nunca única vía de información. |
 
 ## 7. Iconos
 
-Phosphor, `weight="regular"`, 20px en UI, 16px en tablas, 24px en nav. Tokens `icon-sm/md/lg`.
+Phosphor, `weight="regular"`. **El icono sigue al tamaño del control que lo contiene**, y esa es
+toda la escala — no se elige a ojo:
+
+| Contexto | px |
+|----------|----|
+| Dentro de `Badge` y marcas de control (check, caret) | 14 |
+| Controles `sm` / `iconSm`, celdas de tabla, ítems de menú | 16 |
+| Controles de tamaño por defecto (h-11) y cierres de overlay | 20 |
+| Navegación lateral y visor público | 24 |
+| Estados de bloque (vacío, error, drop zone, documento no disponible) | 32 |
+
 Un solo estilo por nivel. Decorativo junto a texto → `aria-hidden`. Botón solo icono → `aria-label`.
+**Un icono que solo acompaña a un párrafo, sin aportar estado, no se pone.**
 Sin emojis. Iconos clave: `UploadSimple`, `File`, `QrCode`, `Printer`, `Tag`, `Copy`, `Clock`, `Prohibit`.
 
 ## 8. Motion
@@ -148,6 +175,8 @@ Estas no son preferencias de diseño. Salen de la Resolución de 5/06/2026 y no 
 ## 11. Anti-patrones (no hacer)
 
 Glass/blur sobre contenido · dark por defecto · hex en componentes · color como único indicador ·
+tarjeta dentro de tarjeta · marco alrededor de un aviso en línea · línea donde basta el aire ·
+dos botones disputándose ser el primario · subtítulo que repite lo que ya se ve ·
 icon-only sin label · spinner que parpadea · tablas que desbordan · borrar sin confirmar ·
 exceso de animación · catálogos (campos DECA, estados, tipos) hardcodeados en el front:
 vienen de la API · presentar un escaneo como DeCA válido · editar un DeCA en vez de
@@ -163,3 +192,5 @@ revisarlo · enseñar un secreto de storage, ni enmascarado.
 - [ ] 375 · 768 · 1024 · 1440 probados, sin scroll horizontal
 - [ ] Skeleton reserva espacio; CLS < 0.1
 - [ ] Textos por i18n; ningún literal en JSX
+- [ ] Un solo radio (6px), un solo peso de borde, la escala de iconos de §7
+- [ ] Una sola acción primaria por vista; lo demás, secundario o en menú

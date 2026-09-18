@@ -36,7 +36,7 @@ export function DropdownMenuItem({
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
-        'relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none transition-colors duration-150 ease-out',
+        'relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-2 text-sm outline-none transition-colors duration-150 ease-out',
         'focus:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         variant === 'destructive' && 'text-destructive-text focus:bg-destructive-surface',
         className,
@@ -53,7 +53,7 @@ export function DropdownMenuRadioItem({
   return (
     <DropdownMenuPrimitive.RadioItem
       className={cn(
-        'relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none focus:bg-muted data-[state=checked]:font-semibold',
+        'relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-2 text-sm outline-none focus:bg-muted data-[state=checked]:font-semibold',
         className,
       )}
       {...props}

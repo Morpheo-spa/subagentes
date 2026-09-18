@@ -116,7 +116,7 @@ function StorageTab() {
   return (
     <div className="flex flex-col gap-4">
       {/* rules/backend.md: las credenciales NO se devuelven por la API, ni enmascaradas. */}
-      <p className="flex items-start gap-2 rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">
+      <p className="flex items-start gap-2 text-sm text-muted-foreground">
         <ShieldWarning size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
         {t('admin.storage.secretsNotice')}
       </p>
@@ -195,13 +195,13 @@ function RetentionTab() {
     return <ErrorState error={policies.error} onRetry={() => void policies.refetch()} />
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       {policies.data.items.map((policy) => {
         const value = drafts[policy.id] ?? policy.retention_days
         // docs/DECA.md §6: 365 dias es el minimo legal; la UI avisa al dejarlo ahi.
         const atMinimum = value <= policy.legal_minimum_days
         return (
-          <div key={policy.id} className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+          <div key={policy.id} className="flex flex-col gap-3">
             <p className="font-medium">{policy.name}</p>
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex flex-col gap-2">
@@ -239,7 +239,7 @@ function RetentionTab() {
               </Button>
             </div>
             {atMinimum ? (
-              <p className="flex items-start gap-2 rounded-md border border-warning bg-warning-surface p-3 text-sm text-warning-text">
+              <p className="flex items-start gap-2 text-sm text-warning-text">
                 <WarningCircle size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
                 {t('admin.retention.minimumWarning', {
                   days: formatNumber(policy.legal_minimum_days, locale),
@@ -257,7 +257,7 @@ export default function AdminPage() {
   const { t } = useI18n()
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={t('admin.title')} description={t('admin.subtitle')} />
+      <PageHeader title={t('admin.title')} />
       <Tabs defaultValue="sites">
         <TabsList>
           <TabsTrigger value="sites">

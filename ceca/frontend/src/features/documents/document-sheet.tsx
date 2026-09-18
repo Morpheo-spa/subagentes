@@ -120,8 +120,6 @@ export function DocumentSheet({
               )}
             </div>
 
-            <Separator />
-
             <Tabs defaultValue="metadata">
               <TabsList>
                 <TabsTrigger value="metadata">{t('documents.tabs.metadata')}</TabsTrigger>
@@ -142,19 +140,12 @@ export function DocumentSheet({
                   <Meta label={t('documents.columns.expiresAt')}>
                     {formatDate(document.expires_at, locale)}
                   </Meta>
-                  <Meta label={t('documents.revisionLabel')}>
-                    {formatNumber(document.revision, locale)}
-                  </Meta>
                   <Meta label={t('documents.columns.prints')}>
                     {formatNumber(document.print_count, locale)}
                   </Meta>
-                  <Meta label={t('documents.sha256')}>
-                    {document.sha256 ? (
-                      <code className="estampa-mono text-meta">{document.sha256.slice(0, 16)}…</code>
-                    ) : (
-                      t('common.never')
-                    )}
-                  </Meta>
+                  {/* Fuera: la revision vigente ya la cuenta la pestana
+                      "Revisiones", y un SHA-256 cortado a 16 caracteres no se
+                      puede verificar ni copiar: era relleno. */}
                 </dl>
                 <Button variant="outline" className="mt-4" asChild>
                   <Link to={`/deca/${document.id}`}>{t('documents.editDeca')}</Link>
@@ -162,9 +153,9 @@ export function DocumentSheet({
               </TabsContent>
 
               <TabsContent value="revisions">
-                <ul className="flex flex-col gap-2">
+                <ul className="flex flex-col gap-4">
                   {revisions.map((revision) => (
-                    <li key={revision.id} className="rounded-md border border-border p-3 text-sm">
+                    <li key={revision.id} className="text-sm">
                       <p className="font-medium">
                         {t('documents.revisionN', { n: revision.revision })}
                         {revision.is_current ? '' : ` · ${t('documents.superseded')}`}
@@ -209,8 +200,6 @@ export function DocumentSheet({
               </TabsContent>
             </Tabs>
 
-            <Separator />
-
             {/* documents.md: reimprimir nunca imprime directo, va a la cola. */}
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex flex-col gap-2">
@@ -249,14 +238,35 @@ export function DocumentSheet({
               ) : (
                 <p className="text-sm text-destructive-text">{t('documents.notPrintable')}</p>
               )}
-              <Button variant="outline" onClick={() => setRevokeOpen(true)}>
-                <QrCode size={20} aria-hidden="true" />
-                {t('documents.revokeToken')}
-              </Button>
-              <Button variant="destructive" onClick={() => setWithdrawOpen(true)}>
-                <Prohibit size={20} aria-hidden="true" />
-                {t('documents.withdraw')}
-              </Button>
+
+              {/* Una sola accion primaria en el panel. Revocar y retirar son
+                  raras y destructivas: viven en el menu, como en la tabla. */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t('documents.rowActions', {
+                      name: document.original_filename,
+                    })}
+                  >
+                    <DotsThree size={20} aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setRevokeOpen(true)}>
+                    <QrCode size={16} aria-hidden="true" />
+                    {t('documents.revokeToken')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => setWithdrawOpen(true)}
+                  >
+                    <Prohibit size={16} aria-hidden="true" />
+                    {t('documents.withdraw')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             <ConfirmDialog

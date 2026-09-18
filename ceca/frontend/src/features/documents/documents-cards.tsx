@@ -1,5 +1,4 @@
 import { Printer } from '@phosphor-icons/react'
-import { Guid } from '@/components/common/guid'
 import { ComplianceBadge, StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -8,7 +7,11 @@ import { useI18n } from '@/lib/i18n'
 import type { DocumentSummary } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-/** documents.md: por debajo de 768px la tabla se convierte en cards. */
+/**
+ * documents.md: por debajo de 768px la tabla se convierte en cards con nombre,
+ * estado, caduca y un boton. El GUID no entra: en el movil no se copia, y el
+ * detalle lo tiene entero.
+ */
 export function DocumentsCards({
   documents,
   onOpen,
@@ -38,7 +41,6 @@ export function DocumentsCards({
               <p className="text-meta text-muted-foreground">
                 {t('documents.expiresOn', { date: formatDate(document.expires_at, locale) })}
               </p>
-              <Guid value={document.id} short />
               {/* Un escaneo no se ofrece para etiqueta: no es un DeCA valido. */}
               {document.is_valid_deca ? (
                 <Button variant="outline" onClick={() => onPrint(document)}>

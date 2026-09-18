@@ -103,69 +103,63 @@ export default function BillingPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={t('billing.title')} description={t('billing.subtitle')} />
+      <PageHeader title={t('billing.title')} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('billing.usage')}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
-            {t('billing.periodLabel', { period: usage.data.period })}
-          </p>
-          <Progress value={usedPercent} aria-label={t('billing.usage')} />
-          <p className="text-sm">
-            {included !== null
-              ? t('billing.documentsUsed', {
-                  used: formatNumber(usage.data.documents_uploaded, locale),
-                  included: formatNumber(included, locale),
-                })
-              : t('billing.documentsUsedNoLimit', {
-                  used: formatNumber(usage.data.documents_uploaded, locale),
-                })}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {t('billing.labelsPrinted', {
-              count: formatNumber(usage.data.labels_printed, locale),
-            })}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {t('billing.storageUsed', { size: formatBytes(usage.data.bytes_stored, locale) })}
-          </p>
-        </CardContent>
-      </Card>
+      {/* Consumo y suscripcion no son tarjetas: son secciones. La caja se queda
+          solo donde de verdad compara unidades entre si (los planes). */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-h2 font-semibold">{t('billing.usage')}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t('billing.periodLabel', { period: usage.data.period })}
+        </p>
+        <Progress value={usedPercent} aria-label={t('billing.usage')} />
+        <p className="text-sm">
+          {included !== null
+            ? t('billing.documentsUsed', {
+                used: formatNumber(usage.data.documents_uploaded, locale),
+                included: formatNumber(included, locale),
+              })
+            : t('billing.documentsUsedNoLimit', {
+                used: formatNumber(usage.data.documents_uploaded, locale),
+              })}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {t('billing.labelsPrinted', {
+            count: formatNumber(usage.data.labels_printed, locale),
+          })}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {t('billing.storageUsed', { size: formatBytes(usage.data.bytes_stored, locale) })}
+        </p>
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('billing.subscription')}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {current ? (
-            <>
-              <p className="flex items-center gap-2">
-                <Badge variant={current.status === 'active' ? 'success' : 'warning'}>
-                  <CreditCard size={14} aria-hidden="true" />
-                  {t(`billing.statuses.${current.status}`)}
-                </Badge>
-                <span className="font-medium">{current.plan_code}</span>
+      <section className="flex flex-col gap-2">
+        <h2 className="text-h2 font-semibold">{t('billing.subscription')}</h2>
+        {current ? (
+          <>
+            <p className="flex items-center gap-2">
+              <Badge variant={current.status === 'active' ? 'success' : 'warning'}>
+                <CreditCard size={14} aria-hidden="true" />
+                {t(`billing.statuses.${current.status}`)}
+              </Badge>
+              <span className="font-medium">{current.plan_code}</span>
+            </p>
+            {current.current_period_end ? (
+              <p className="text-sm text-muted-foreground">
+                {current.cancel_at_period_end
+                  ? t('billing.cancelsOn', {
+                      date: formatDate(current.current_period_end, locale),
+                    })
+                  : t('billing.renewsOn', {
+                      date: formatDate(current.current_period_end, locale),
+                    })}
               </p>
-              {current.current_period_end ? (
-                <p className="text-sm text-muted-foreground">
-                  {current.cancel_at_period_end
-                    ? t('billing.cancelsOn', {
-                        date: formatDate(current.current_period_end, locale),
-                      })
-                    : t('billing.renewsOn', {
-                        date: formatDate(current.current_period_end, locale),
-                      })}
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">{t('billing.noSubscription')}</p>
-          )}
-        </CardContent>
-      </Card>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t('billing.noSubscription')}</p>
+        )}
+      </section>
 
       <section aria-label={t('billing.plans')} className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {[...plans.data.items]

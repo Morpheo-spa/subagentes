@@ -1,11 +1,17 @@
-"""Redis access, and the JWT blacklist that makes logout mean something.
+"""Redis access, the JWT blacklist, and the per-user session epoch.
 
-One module owns the client and the key prefix so the writer (logout, refresh
-rotation) and the reader (request authentication) can never drift apart.
+One module owns the client and the key prefixes so the writer (logout, refresh
+rotation, a role change) and the reader (request authentication) can never
+drift apart.
+
+Both checks fail **closed**: if Redis does not answer, the connection error
+propagates, the request ends in a 500 and the caller is denied. A revocation
+store that fails open is not a revocation store.
 """
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,6 +21,9 @@ from app.config import get_settings
 from app.errors import DomainError
 
 BLACKLIST_PREFIX = "jwt:blacklist:"
+#: Tokens carry their permissions inside, so revoking a *claim* needs a second
+#: mark: "every access token this user was issued before T is stale".
+SESSION_EPOCH_PREFIX = "jwt:epoch:"
 
 _client: redis.Redis | None = None
 
@@ -59,3 +68,43 @@ async def is_blacklisted(payload: dict[str, Any]) -> bool:
 async def reject_if_blacklisted(payload: dict[str, Any]) -> None:
     if await is_blacklisted(payload):
         raise DomainError("TOKEN_REVOKED", status_code=401)
+
+
+def _epoch_key(user_id: uuid.UUID | str) -> str:
+    return f"{SESSION_EPOCH_PREFIX}{user_id}"
+
+
+async def invalidate_user_sessions(user_id: uuid.UUID) -> None:
+    """Void every access token this user already holds.
+
+    Called when what the token *asserts* stops being true: the account is
+    disabled, the role or the extra permissions change, a membership is added
+    or removed, or the password is replaced. The mark only has to outlive the
+    longest-lived access token, so it expires with one.
+
+    The epoch is the **next** whole second: ``iat`` has one-second resolution,
+    so a token minted during this very second must not be able to look newer
+    than the change that invalidated it.
+    """
+    ttl = get_settings().access_token_minutes * 60 + 60
+    epoch = int(datetime.now(UTC).timestamp()) + 1
+    await get_redis().setex(_epoch_key(user_id), ttl, str(epoch))
+
+
+async def reject_if_stale(payload: dict[str, Any]) -> None:
+    """Refuse an access token issued before the user's claims last changed.
+
+    One Redis read per request, the same shape as the blacklist. The refresh
+    token is deliberately *not* checked here: ``/auth/refresh`` rebuilds the
+    claims from the database, so it is how a still-valid session picks up its
+    new permissions instead of being logged out.
+    """
+    subject = payload.get("sub")
+    if not subject:
+        return
+    raw: Any = await get_redis().get(_epoch_key(str(subject)))
+    if raw is None:
+        return
+    issued_at = payload.get("iat")
+    if issued_at is None or int(issued_at) < int(raw):
+        raise DomainError("SESSION_STALE", status_code=401)

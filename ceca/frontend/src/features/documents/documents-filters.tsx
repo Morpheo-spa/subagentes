@@ -1,4 +1,4 @@
-import { MagnifyingGlass, X } from '@phosphor-icons/react'
+import { X } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { FormField, FormLabel, useFormControlProps } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -62,10 +62,11 @@ export function DocumentsFilters({
 }) {
   const { t } = useI18n()
 
+  // Sin tarjeta: los filtros se separan del listado con aire, no con un marco.
   return (
     <section
       aria-label={t('documents.filters')}
-      className="grid gap-4 rounded-lg border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4"
+      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
     >
       <FormField>
         <TextFilter
@@ -140,15 +141,13 @@ export function DocumentsFilters({
         />
       </FormField>
 
-      <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
+      {/* Sin nota de ayuda: la etiqueta del campo ya dice que se busca por
+          nombre o GUID, y el icono junto al texto solo adornaba. */}
+      <div className="flex items-end sm:col-span-2 lg:col-span-4">
         <Button variant="outline" size="sm" onClick={onReset}>
           <X size={16} aria-hidden="true" />
           {t('documents.resetFilters')}
         </Button>
-        <p className="flex items-center gap-1 text-meta text-muted-foreground">
-          <MagnifyingGlass size={14} aria-hidden="true" />
-          {t('documents.searchHint')}
-        </p>
       </div>
     </section>
   )

@@ -124,7 +124,7 @@ export function DocumentsTable({
                 size="iconSm"
                 aria-label={t('documents.rowActions', { name: row.original.original_filename })}
               >
-                <DotsThree size={20} aria-hidden="true" />
+                <DotsThree size={16} aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

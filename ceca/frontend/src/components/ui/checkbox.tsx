@@ -10,7 +10,7 @@ export function Checkbox({
   return (
     <CheckboxPrimitive.Root
       className={cn(
-        'peer h-5 w-5 shrink-0 cursor-pointer rounded-sm border border-input bg-card transition-colors duration-150 ease-out',
+        'peer h-5 w-5 shrink-0 cursor-pointer rounded-md border border-input bg-card transition-colors duration-150 ease-out',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50',
         'data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground',
         'data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground',

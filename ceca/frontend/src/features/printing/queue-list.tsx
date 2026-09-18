@@ -10,6 +10,10 @@ import type { QueueItemRead } from '@/lib/types'
  * print-queue.md: reordenar con botones ↑↓ ADEMAS de drag.
  * El drag nunca es la unica via (WCAG 2.2).
  *
+ * Sin tarjeta por item: la lista se lee mejor con aire y el asa de arrastre ya
+ * marca donde empieza cada fila. Los tres botones son `ghost`: la fila no
+ * necesita tres cajas.
+ *
  * Las copias NO se editan aqui: el backend solo las acepta al anadir a la cola
  * (`QueueAddRequest.copies`), no tiene endpoint para cambiarlas despues.
  */
@@ -40,17 +44,20 @@ export function QueueList({
               setDragIndex(null)
             }}
             onDragEnd={() => setDragIndex(null)}
-            className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-3"
+            className="flex flex-wrap items-center gap-2 py-1"
           >
-            <DotsSixVertical size={20} aria-hidden="true" className="text-muted-foreground" />
+            <DotsSixVertical size={16} aria-hidden="true" className="text-muted-foreground" />
             <span className="min-w-0 flex-1 truncate font-medium" title={name}>
               {truncateMiddle(name, 36)}
             </span>
 
-            <Badge variant="neutral">{t('printing.copiesCount', { count: item.copies })}</Badge>
+            {/* "1 copias" no es informacion: la cuenta solo aparece si hay mas de una. */}
+            {item.copies > 1 ? (
+              <Badge variant="neutral">{t('printing.copiesCount', { count: item.copies })}</Badge>
+            ) : null}
 
             <Button
-              variant="outline"
+              variant="ghost"
               size="iconSm"
               aria-label={t('printing.moveUp', { name })}
               disabled={index === 0}
@@ -59,7 +66,7 @@ export function QueueList({
               <ArrowUp size={16} aria-hidden="true" />
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               size="iconSm"
               aria-label={t('printing.moveDown', { name })}
               disabled={index === items.length - 1}

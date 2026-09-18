@@ -33,7 +33,6 @@
       "name": "Nombre",
       "secretsNotice": "Las credenciales se guardan cifradas y no se muestran nunca, ni siquiera enmascaradas. Para cambiarlas hay que volver a introducirlas."
     },
-    "subtitle": "Centros, usuarios, almacenamiento y retención.",
     "tabs": {
       "retention": "Retención",
       "sites": "Centros",
@@ -92,7 +91,6 @@
     },
     "storageUsed": "Almacenamiento usado: {size}",
     "subscription": "Suscripción",
-    "subtitle": "Plan, suscripción y consumo del centro.",
     "title": "Facturación",
     "usage": "Consumo"
   },
@@ -141,7 +139,6 @@
     "generatedToast": "DeCA generado correctamente",
     "incompleteNotice": "Faltan {count} campos obligatorios: se guardará como incompleto.",
     "legalRef": "(art. {ref})",
-    "nativeNotice": "El PDF se genera de forma nativa desde estos datos, con el QR embebido. Es la única vía plenamente conforme: un escaneo no sirve.",
     "openInDocuments": "Abrir en Documentos",
     "partiesNotDistinct": "El cargador contractual y el transportista efectivo no pueden tener el mismo NIF.",
     "revisionSaved": "Revisión creada",
@@ -184,7 +181,6 @@
     "compliance": "Conformidad",
     "copyPublicUrl": "Copiar la URL pública",
     "editDeca": "Editar los datos DeCA",
-    "emptyBody": "Sube tu primer PDF y aparecerá aquí con su QR.",
     "emptyCta": "Subir un PDF",
     "emptyTitle": "Aún no hay documentos",
     "expiresBefore": "Caduca antes de",
@@ -203,7 +199,6 @@
     "print": "Imprimir",
     "printedCopies": "{count} copias impresas",
     "resetFilters": "Limpiar filtros",
-    "revisionLabel": "Revisión",
     "revisionN": "Revisión {n}",
     "revokeBody": "El enlace público dejará de funcionar de inmediato. Documento:",
     "revokeTitle": "Revocar el QR",
@@ -211,14 +206,11 @@
     "revoked": "QR revocado",
     "rowActions": "Acciones de {name}",
     "search": "Buscar por nombre o GUID",
-    "searchHint": "La búsqueda incluye el nombre original y el GUID.",
     "selectAll": "Seleccionar todos los documentos",
     "selectOne": "Seleccionar {name}",
     "selectedCount": "{count} seleccionados",
-    "sha256": "SHA-256",
     "size": "Tamaño",
     "status": "Estado",
-    "subtitle": "Busca, reimprime, revisa el historial o retira.",
     "superseded": "sustituida",
     "tabs": {
       "history": "Historial",
@@ -242,7 +234,6 @@
     "forbiddenTitle": "Sin permiso",
     "notFoundBody": "La dirección que has abierto no existe.",
     "notFoundTitle": "Página no encontrada",
-    "title": "Algo ha fallado",
     "unexpected": "Ha ocurrido un error inesperado."
   },
   "nav": {
@@ -274,11 +265,10 @@
     "copiesCount": "{count} copias",
     "didItPrintBody": "Si todo ha salido bien vaciamos la cola. Si no, la mantenemos y marcamos el trabajo como fallido.",
     "didItPrintTitle": "¿Se imprimió bien?",
-    "emptyBody": "Añade documentos desde el listado o desde una subida.",
     "emptyCta": "Ir a Documentos",
     "emptyTitle": "La cola está vacía",
     "jobName": "Nombre del trabajo",
-    "jobNameHelp": "Solo es la etiqueta con la que queda registrado el trabajo. La impresora se elige en el diálogo de impresión del sistema.",
+    "jobNameHelp": "Solo es la etiqueta del registro: la impresora se elige en el diálogo del sistema.",
     "jobRegistered": "Trabajo de impresión registrado",
     "markedFailed": "Trabajo marcado como fallido",
     "mode": "Modo",
@@ -298,13 +288,11 @@
     "removed": "Quitado de la cola",
     "settings": "Configuración",
     "startPosition": "Empezar en la posición",
-    "subtitle": "Acumula etiquetas y lánzalas de una vez.",
     "summary": "{labels} etiquetas · {pages} páginas",
     "template": "Plantilla",
     "title": "Cola de impresión"
   },
   "public": {
-    "download": "Descargar el PDF",
     "issuedOn": "Emitido el {date}",
     "openOrDownload": "Abrir o descargar",
     "pageOf": "Página {page} de {name}",
@@ -362,8 +350,6 @@
     "dropHint": "Solo PDF, hasta {size} por archivo.",
     "dropTitle": "Arrastra aquí tus PDFs",
     "duplicateWarning": "Ya existe un archivo idéntico, subido el {date}.",
-    "emptyBody": "Arrastra tus PDFs o usa el botón «Seleccionar archivos».",
-    "emptyTitle": "Todavía no has añadido ningún archivo",
     "errorCodes": {
       "DOCUMENT_IS_A_SCAN": "El PDF no tiene capa de texto: es un escaneo.",
       "DOCUMENT_PROCESSING_FAILED": "El procesado del documento ha fallado.",
@@ -395,7 +381,6 @@
     "summary": "{total} archivos · {ready} listos · {errors} con error",
     "title": "Subir PDFs",
     "uploadingPercent": "Subiendo {percent} %",
-    "urlCopied": "URL pública copiada",
     "view": "Ver el documento"
   }
 }

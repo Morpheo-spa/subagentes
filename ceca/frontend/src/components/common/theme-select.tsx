@@ -21,7 +21,7 @@ export function ThemeSelect() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="iconSm" aria-label={t('shell.theme')}>
-          <Current size={18} aria-hidden="true" />
+          <Current size={16} aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

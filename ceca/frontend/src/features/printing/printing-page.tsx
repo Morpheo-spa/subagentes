@@ -211,13 +211,12 @@ export default function PrintingPage() {
   return (
     <div className="flex flex-col gap-6 pb-24">
       <div className="estampa-no-print flex flex-col gap-6">
-        <PageHeader title={t('printing.title')} description={t('printing.subtitle')} />
+        <PageHeader title={t('printing.title')} />
 
         {items.length === 0 ? (
           <EmptyState
             icon={Stack}
             title={t('printing.emptyTitle')}
-            description={t('printing.emptyBody')}
             action={
               <Button asChild>
                 <Link to="/documents">{t('printing.emptyCta')}</Link>

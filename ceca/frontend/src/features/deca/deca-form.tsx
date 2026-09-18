@@ -105,7 +105,7 @@ export function DecaForm({
       </form.Subscribe>
 
       {blocks.map((entry) => (
-        <fieldset key={entry.block} className="rounded-lg border border-border bg-card p-4">
+        <fieldset key={entry.block} className="rounded-md border border-border bg-card p-4">
           {/* docs/DECA.md §3: cargador y transportista, expresos y diferenciados. */}
           <legend className="px-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             {t(`deca.blocks.${entry.block}`)}
