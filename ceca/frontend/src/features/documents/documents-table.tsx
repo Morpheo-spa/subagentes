@@ -5,10 +5,10 @@ import {
   type ColumnDef,
   type RowSelectionState,
 } from '@tanstack/react-table'
-import { CaretDown, CaretUp, DotsThree, Printer, Prohibit } from '@phosphor-icons/react'
+import { DotsThree, Printer, Prohibit } from '@phosphor-icons/react'
 import { useMemo } from 'react'
 import { Guid } from '@/components/common/guid'
-import { StatusBadge } from '@/components/common/status-badge'
+import { ComplianceBadge, StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -20,9 +20,14 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDate, formatNumber, isExpiringSoon, truncateMiddle } from '@/lib/format'
 import { useI18n } from '@/lib/i18n'
-import type { DocumentListParams, DocumentSummary } from '@/lib/types'
+import type { DocumentSummary } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
+/**
+ * Sin ordenacion por columna: `GET /documents/` no acepta `sort` ni `order`
+ * (ver `_filters` en `app/routers/documents.py`). Antes que fingir un orden que
+ * el servidor no aplica, no se ofrece.
+ */
 export function DocumentsTable({
   documents,
   selection,
@@ -30,8 +35,6 @@ export function DocumentsTable({
   onOpen,
   onPrint,
   onWithdraw,
-  params,
-  onSort,
 }: {
   documents: DocumentSummary[]
   selection: RowSelectionState
@@ -39,8 +42,6 @@ export function DocumentsTable({
   onOpen: (document: DocumentSummary) => void
   onPrint: (document: DocumentSummary) => void
   onWithdraw: (document: DocumentSummary) => void
-  params: DocumentListParams
-  onSort: (field: string) => void
 }) {
   const { t, locale } = useI18n()
 
@@ -65,13 +66,12 @@ export function DocumentsTable({
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
-            aria-label={t('documents.selectOne', { name: row.original.original_name })}
+            aria-label={t('documents.selectOne', { name: row.original.original_filename })}
           />
         ),
       },
       {
-        id: 'original_name',
-        accessorKey: 'original_name',
+        id: 'original_filename',
         header: () => t('documents.columns.name'),
         cell: ({ row }) => (
           <button
@@ -79,7 +79,7 @@ export function DocumentsTable({
             className="cursor-pointer text-left font-medium underline-offset-2 hover:underline"
             onClick={() => onOpen(row.original)}
           >
-            {truncateMiddle(row.original.original_name, 48)}
+            {truncateMiddle(row.original.original_filename, 48)}
           </button>
         ),
       },
@@ -92,13 +92,16 @@ export function DocumentsTable({
         id: 'status',
         header: () => t('documents.columns.status'),
         cell: ({ row }) => (
-          <StatusBadge status={row.original.status} expiresAt={row.original.expires_at} />
+          <div className="flex flex-col items-start gap-1">
+            <StatusBadge status={row.original.status} expiresAt={row.original.expires_at} />
+            <ComplianceBadge status={row.original.compliance_status} />
+          </div>
         ),
       },
       {
-        id: 'uploaded_at',
+        id: 'created_at',
         header: () => t('documents.columns.uploadedAt'),
-        cell: ({ row }) => formatDate(row.original.uploaded_at, locale),
+        cell: ({ row }) => formatDate(row.original.created_at, locale),
       },
       {
         id: 'expires_at',
@@ -119,7 +122,7 @@ export function DocumentsTable({
               <Button
                 variant="ghost"
                 size="iconSm"
-                aria-label={t('documents.rowActions', { name: row.original.original_name })}
+                aria-label={t('documents.rowActions', { name: row.original.original_filename })}
               >
                 <DotsThree size={20} aria-hidden="true" />
               </Button>
@@ -128,10 +131,13 @@ export function DocumentsTable({
               <DropdownMenuItem onSelect={() => onOpen(row.original)}>
                 {t('documents.openDetail')}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onPrint(row.original)}>
-                <Printer size={16} aria-hidden="true" />
-                {t('documents.addToQueue')}
-              </DropdownMenuItem>
+              {/* Solo se ofrece etiqueta para lo que es un DeCA valido. */}
+              {row.original.is_valid_deca ? (
+                <DropdownMenuItem onSelect={() => onPrint(row.original)}>
+                  <Printer size={16} aria-hidden="true" />
+                  {t('documents.addToQueue')}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem variant="destructive" onSelect={() => onWithdraw(row.original)}>
                 <Prohibit size={16} aria-hidden="true" />
                 {t('documents.withdraw')}
@@ -158,39 +164,16 @@ export function DocumentsTable({
     },
   })
 
-  const SORTABLE = new Set(['original_name', 'uploaded_at', 'expires_at', 'print_count'])
-
   return (
     <Table>
       <TableHeader>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
-            {headerGroup.headers.map((header) => {
-              const sortable = SORTABLE.has(header.column.id)
-              const active = params.sort === header.column.id
-              return (
-                <TableHead key={header.id} aria-sort={active ? (params.order === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                  {sortable ? (
-                    <button
-                      type="button"
-                      className="flex cursor-pointer items-center gap-1 font-semibold"
-                      onClick={() => onSort(header.column.id)}
-                    >
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      {active ? (
-                        params.order === 'asc' ? (
-                          <CaretUp size={12} aria-hidden="true" />
-                        ) : (
-                          <CaretDown size={12} aria-hidden="true" />
-                        )
-                      ) : null}
-                    </button>
-                  ) : (
-                    flexRender(header.column.columnDef.header, header.getContext())
-                  )}
-                </TableHead>
-              )
-            })}
+            {headerGroup.headers.map((header) => (
+              <TableHead key={header.id}>
+                {flexRender(header.column.columnDef.header, header.getContext())}
+              </TableHead>
+            ))}
           </TableRow>
         ))}
       </TableHeader>

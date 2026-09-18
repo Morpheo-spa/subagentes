@@ -12,21 +12,21 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
-import { ApiError, buildUrl } from '@/lib/api'
+import { ApiError } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
-import type { DocumentListParams } from '@/lib/types'
+import { useAddToQueue } from '@/features/printing/printing-queries'
 import { DocumentSheet } from './document-sheet'
 import { DocumentsCards } from './documents-cards'
 import { DocumentsFilters } from './documents-filters'
 import { DocumentsTable } from './documents-table'
-import { useDocuments, useQueueForPrint, useWithdrawDocuments } from './documents-queries'
+import {
+  downloadDocumentsCsv,
+  useDocuments,
+  useWithdrawDocuments,
+  type DocumentListParams,
+} from './documents-queries'
 
-const INITIAL_PARAMS: DocumentListParams = {
-  page: 1,
-  page_size: 25,
-  sort: 'uploaded_at',
-  order: 'desc',
-}
+const INITIAL_PARAMS: DocumentListParams = { page: 1, page_size: 25 }
 
 export default function DocumentsPage() {
   const { t } = useI18n()
@@ -38,7 +38,7 @@ export default function DocumentsPage() {
 
   const openId = searchParams.get('document')
   const list = useDocuments(params)
-  const queue = useQueueForPrint()
+  const queue = useAddToQueue()
   const withdraw = useWithdrawDocuments()
 
   const selectedIds = Object.keys(selection).filter((id) => selection[id])
@@ -58,7 +58,7 @@ export default function DocumentsPage() {
 
   const addToQueue = (ids: string[]) =>
     queue.mutate(
-      ids.map((id) => ({ document_id: id, copies: 1 })),
+      { documentIds: ids },
       {
         onSuccess: () => {
           toast.success(t('printing.addedToQueue', { count: ids.length }))
@@ -69,11 +69,15 @@ export default function DocumentsPage() {
       },
     )
 
+  // El CSV va detras del bearer: se descarga con la sesion, no abriendo la URL.
+  // `GET /documents/export.csv` exporta lo que filtren los parametros; no
+  // acepta una lista de ids, asi que la seleccion no lo acota.
   const exportCsv = () => {
-    // Descarga directa: la API responde text/csv con el filtro aplicado.
-    const url = buildUrl('/documents/export', { ...params, ids: selectedIds.join(',') })
-    window.open(url, '_blank', 'noopener')
-    toast.success(t('documents.exportStarted'))
+    void downloadDocumentsCsv(params)
+      .then(() => toast.success(t('documents.exportStarted')))
+      .catch((error: unknown) =>
+        toast.error(error instanceof ApiError ? error.message : t('errors.unexpected')),
+      )
   }
 
   return (
@@ -118,14 +122,6 @@ export default function DocumentsPage() {
                 setSelection({ [document.id]: true })
                 setWithdrawOpen(true)
               }}
-              params={params}
-              onSort={(field) =>
-                setParams((current) => ({
-                  ...current,
-                  sort: field,
-                  order: current.sort === field && current.order === 'asc' ? 'desc' : 'asc',
-                }))
-              }
             />
           </div>
           <div className="md:hidden">
@@ -192,7 +188,7 @@ export default function DocumentsPage() {
         description={t('documents.withdrawBodyBulk', { count: selectedIds.length })}
         objectName={
           selectedIds.length === 1
-            ? (documents.find((document) => document.id === selectedIds[0])?.original_name ?? '')
+            ? (documents.find((document) => document.id === selectedIds[0])?.original_filename ?? '')
             : t('documents.nSelected', { count: selectedIds.length })
         }
         confirmLabel={t('documents.withdraw')}
@@ -211,8 +207,12 @@ export default function DocumentsPage() {
           withdraw.mutate(
             { ids: selectedIds, reason },
             {
-              onSuccess: () => {
-                toast.success(t('documents.withdrawn'))
+              onSuccess: ({ total, failed }) => {
+                if (failed.length > 0) {
+                  toast.error(t('documents.withdrawPartial', { done: total - failed.length, total }))
+                } else {
+                  toast.success(t('documents.withdrawn'))
+                }
                 setWithdrawOpen(false)
                 setSelection({})
                 setReason('')

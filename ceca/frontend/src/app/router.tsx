@@ -73,7 +73,7 @@ const routes = createRoutesFromElements(
           <Route path="/upload" element={<UploadPage />} />
         </Route>
 
-        <Route element={<ProtectedRoute permission={PERMISSIONS.decaWrite} />}>
+        <Route element={<ProtectedRoute permission={PERMISSIONS.documentsCreate} />}>
           <Route path="/deca/new" element={<DecaGeneratePage />} />
           <Route path="/deca/:documentId" element={<DecaEditPage />} />
         </Route>
@@ -90,7 +90,7 @@ const routes = createRoutesFromElements(
           <Route path="/billing" element={<BillingPage />} />
         </Route>
 
-        <Route element={<ProtectedRoute permission={PERMISSIONS.adminUsers} />}>
+        <Route element={<ProtectedRoute permission={PERMISSIONS.usersRead} />}>
           <Route path="/admin" element={<AdminPage />} />
         </Route>
 

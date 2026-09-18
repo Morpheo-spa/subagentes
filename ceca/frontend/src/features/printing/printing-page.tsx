@@ -16,32 +16,65 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { FormField, FormLabel, useFormControlProps } from '@/components/ui/form'
+import { FormDescription, FormField, FormLabel, useFormControlProps } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label as FieldLabel } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
 import { ApiError } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { formatNumber } from '@/lib/format'
 import { useI18n } from '@/lib/i18n'
-import type { PrintQueueItem, PrintTemplate } from '@/lib/types'
-import { paginate, PrintSheet } from './print-sheet'
+import type { LabelTemplateRead, PrintLayout, QueueItemRead } from '@/lib/types'
+import { paginate, PrintSheet, slotsPerPage } from './print-sheet'
 import { QueueList } from './queue-list'
 import {
+  fetchJobRender,
   useConfirmPrintJob,
   useCreatePrintJob,
-  usePrinters,
   usePrintQueue,
   usePrintTemplates,
   useRemoveFromQueue,
-  useUpdateQueue,
+  useReorderQueue,
 } from './printing-queries'
 
-const PRINTER_KEY = 'estampa.printer'
+/**
+ * Solo el NOMBRE que el usuario teclea, que es lo que el backend guarda en
+ * `PrintJob.printer_name` como etiqueta del trabajo. La impresora de verdad la
+ * elige el dialogo nativo: el navegador no puede enumerar impresoras, y el
+ * backend no tiene (ni puede tener) un catalogo de ellas.
+ */
+const PRINTER_NAME_KEY = 'estampa.printerName'
 const TEMPLATE_KEY = 'estampa.template'
+
+function TextField({
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  hint?: string
+}) {
+  const control = useFormControlProps()
+  return (
+    <>
+      <FormLabel>{label}</FormLabel>
+      <Input {...control} value={value} onChange={(event) => onChange(event.target.value)} />
+      {hint ? <FormDescription>{hint}</FormDescription> : null}
+    </>
+  )
+}
 
 function StartPositionField({
   value,
@@ -71,56 +104,59 @@ function StartPositionField({
 
 export default function PrintingPage() {
   const { t, locale, pick } = useI18n()
-  const { user } = useAuth()
+  const { site } = useAuth()
   const queue = usePrintQueue()
   const templates = usePrintTemplates()
-  const printers = usePrinters()
-  const updateQueue = useUpdateQueue()
+  const reorder = useReorderQueue()
   const removeItem = useRemoveFromQueue()
   const createJob = useCreatePrintJob()
   const confirmJob = useConfirmPrintJob()
 
-  const [items, setItems] = useState<PrintQueueItem[]>([])
-  const [mode, setMode] = useState<'single' | 'grid'>('grid')
-  const [templateId, setTemplateId] = useState<string>('')
-  const [printerId, setPrinterId] = useState<string>('')
+  const [items, setItems] = useState<QueueItemRead[]>([])
+  const [layout, setLayout] = useState<PrintLayout>('sheet')
+  const [templateCode, setTemplateCode] = useState('')
+  const [printerName, setPrinterName] = useState('')
   const [startPosition, setStartPosition] = useState(1)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [pendingRemoval, setPendingRemoval] = useState<PrintQueueItem | null>(null)
+  const [pendingRemoval, setPendingRemoval] = useState<QueueItemRead | null>(null)
   const [printedJobId, setPrintedJobId] = useState<string | null>(null)
 
   useEffect(() => {
     if (queue.data) setItems(queue.data.items)
   }, [queue.data])
 
-  // Recordar impresora y plantilla (print-queue.md).
+  // Recordar nombre de trabajo y plantilla (print-queue.md).
   useEffect(() => {
     try {
-      const storedPrinter = window.localStorage.getItem(PRINTER_KEY)
+      const storedPrinter = window.localStorage.getItem(PRINTER_NAME_KEY)
       const storedTemplate = window.localStorage.getItem(TEMPLATE_KEY)
-      if (storedPrinter) setPrinterId(storedPrinter)
-      if (storedTemplate) setTemplateId(storedTemplate)
+      if (storedPrinter) setPrinterName(storedPrinter)
+      if (storedTemplate) setTemplateCode(storedTemplate)
     } catch {
       /* preferencia no persistible */
     }
   }, [])
 
   const available = useMemo(
-    () => (templates.data?.items ?? []).filter((template) => template.mode === mode),
-    [templates.data, mode],
+    () => (templates.data?.items ?? []).filter((entry) => (entry.layout ?? 'sheet') === layout),
+    [templates.data, layout],
   )
 
-  const template: PrintTemplate | undefined =
-    available.find((entry) => entry.id === templateId) ?? available[0]
+  const template: LabelTemplateRead | undefined =
+    available.find((entry) => entry.code === templateCode) ?? available[0]
 
   const pages = template ? paginate(items, template, startPosition) : []
   const labelCount = items.reduce((total, item) => total + Math.max(1, item.copies), 0)
-  const perPage = template ? (template.mode === 'single' ? 1 : template.columns * template.rows) : 1
+  const perPage = template ? slotsPerPage(template) : 1
 
-  const persist = (next: PrintQueueItem[]) => {
+  const move = (from: number, to: number) => {
+    if (to < 0 || to >= items.length) return
+    const next = [...items]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
     setItems(next)
-    updateQueue.mutate(
-      next.map((item, index) => ({ id: item.id, copies: item.copies, position: index })),
+    reorder.mutate(
+      next.map((item) => item.id),
       {
         onError: (error) =>
           toast.error(error instanceof ApiError ? error.message : t('errors.unexpected')),
@@ -128,30 +164,29 @@ export default function PrintingPage() {
     )
   }
 
-  const move = (from: number, to: number) => {
-    if (to < 0 || to >= items.length) return
-    const next = [...items]
-    const [moved] = next.splice(from, 1)
-    next.splice(to, 0, moved)
-    persist(next)
-  }
-
   const print = () => {
     if (!template) return
     createJob.mutate(
       {
-        printer_id: printerId || null,
-        template_id: template.id,
+        template_code: template.code,
+        printer_name: printerName.trim() || null,
         start_position: startPosition,
-        items: items.map((item) => ({ queue_item_id: item.id, copies: item.copies })),
+        item_ids: items.map((item) => item.id),
       },
       {
-        onSuccess: (job) => {
+        onSuccess: async (job) => {
           setConfirmOpen(false)
           setPrintedJobId(job.id)
           toast.success(t('printing.jobRegistered'))
           // El PrintJob queda registrado ANTES de abrir el dialogo del sistema.
-          window.setTimeout(() => window.print(), 50)
+          // El folio lo compone el backend; la impresora la elige ese dialogo.
+          try {
+            const blob = await fetchJobRender(job.id)
+            const url = URL.createObjectURL(blob)
+            window.open(url, '_blank', 'noopener')
+          } catch (error) {
+            toast.error(error instanceof ApiError ? error.message : t('errors.unexpected'))
+          }
         },
         onError: (error) =>
           toast.error(error instanceof ApiError ? error.message : t('errors.unexpected')),
@@ -169,8 +204,9 @@ export default function PrintingPage() {
   }
 
   if (queue.isError) return <ErrorState error={queue.error} onRetry={() => void queue.refetch()} />
-  if (templates.isError)
+  if (templates.isError) {
     return <ErrorState error={templates.error} onRetry={() => void templates.refetch()} />
+  }
 
   return (
     <div className="flex flex-col gap-6 pb-24">
@@ -192,55 +228,41 @@ export default function PrintingPage() {
           <div className="grid gap-6 lg:grid-cols-2">
             <section aria-label={t('printing.queueSection')} className="flex flex-col gap-3">
               <h2 className="text-h2 font-semibold">{t('printing.queueSection')}</h2>
-              <QueueList
-                items={items}
-                onMove={move}
-                onCopies={(id, copies) =>
-                  persist(items.map((item) => (item.id === id ? { ...item, copies } : item)))
-                }
-                onRemove={setPendingRemoval}
-              />
+              <QueueList items={items} onMove={move} onRemove={setPendingRemoval} />
             </section>
 
             <section aria-label={t('printing.settings')} className="flex flex-col gap-4">
               <h2 className="text-h2 font-semibold">{t('printing.settings')}</h2>
 
               <FormField>
-                <FormLabel>{t('printing.printer')}</FormLabel>
-                <Select
-                  value={printerId}
-                  onValueChange={(value) => {
-                    setPrinterId(value)
+                <TextField
+                  label={t('printing.jobName')}
+                  value={printerName}
+                  hint={t('printing.jobNameHelp')}
+                  onChange={(value) => {
+                    setPrinterName(value)
                     try {
-                      window.localStorage.setItem(PRINTER_KEY, value)
+                      window.localStorage.setItem(PRINTER_NAME_KEY, value)
                     } catch {
                       /* preferencia no persistible */
                     }
                   }}
-                >
-                  <SelectTrigger aria-label={t('printing.printer')}>
-                    <SelectValue placeholder={t('printing.systemPrinter')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(printers.data?.items ?? []).map((printer) => (
-                      <SelectItem key={printer.id} value={printer.id}>
-                        {printer.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </FormField>
 
               <fieldset className="flex flex-col gap-2">
                 <legend className="text-sm font-medium">{t('printing.mode')}</legend>
-                <RadioGroup value={mode} onValueChange={(value) => setMode(value as 'single' | 'grid')}>
+                <RadioGroup
+                  value={layout}
+                  onValueChange={(value) => setLayout(value as PrintLayout)}
+                >
                   <div className="flex items-center gap-2">
                     <RadioGroupItem value="single" id="mode-single" />
                     <FieldLabel htmlFor="mode-single">{t('printing.modeSingle')}</FieldLabel>
                   </div>
                   <div className="flex items-center gap-2">
-                    <RadioGroupItem value="grid" id="mode-grid" />
-                    <FieldLabel htmlFor="mode-grid">{t('printing.modeGrid')}</FieldLabel>
+                    <RadioGroupItem value="sheet" id="mode-sheet" />
+                    <FieldLabel htmlFor="mode-sheet">{t('printing.modeGrid')}</FieldLabel>
                   </div>
                 </RadioGroup>
               </fieldset>
@@ -248,9 +270,9 @@ export default function PrintingPage() {
               <FormField>
                 <FormLabel>{t('printing.template')}</FormLabel>
                 <Select
-                  value={template?.id ?? ''}
+                  value={template?.code ?? ''}
                   onValueChange={(value) => {
-                    setTemplateId(value)
+                    setTemplateCode(value)
                     try {
                       window.localStorage.setItem(TEMPLATE_KEY, value)
                     } catch {
@@ -263,15 +285,15 @@ export default function PrintingPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {available.map((entry) => (
-                      <SelectItem key={entry.id} value={entry.id}>
-                        {pick(entry, 'label')}
+                      <SelectItem key={entry.code} value={entry.code}>
+                        {pick(entry, 'name') || entry.code}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </FormField>
 
-              {mode === 'grid' ? (
+              {perPage > 1 ? (
                 <FormField>
                   <StartPositionField
                     value={startPosition}
@@ -293,7 +315,7 @@ export default function PrintingPage() {
               items={items}
               template={template}
               startPosition={startPosition}
-              tenantName={user?.sites.find((site) => site.id === user.site_id)?.name ?? null}
+              siteName={site?.name ?? null}
             />
           </div>
         </section>
@@ -324,7 +346,7 @@ export default function PrintingPage() {
           labels: formatNumber(labelCount, locale),
           pages: formatNumber(pages.length, locale),
         })}
-        objectName={template ? pick(template, 'label') : ''}
+        objectName={template ? (pick(template, 'name') || template.code) : ''}
         confirmLabel={t('printing.print')}
         destructive={false}
         disabled={createJob.isPending}
@@ -336,7 +358,7 @@ export default function PrintingPage() {
         onOpenChange={(open) => !open && setPendingRemoval(null)}
         title={t('printing.removeTitle')}
         description={t('printing.removeBody')}
-        objectName={pendingRemoval?.original_name ?? ''}
+        objectName={pendingRemoval?.document?.original_filename ?? ''}
         confirmLabel={t('common.remove')}
         onConfirm={() => {
           if (!pendingRemoval) return
@@ -363,10 +385,8 @@ export default function PrintingPage() {
               onClick={() => {
                 if (!printedJobId) return
                 confirmJob.mutate(
-                  { jobId: printedJobId, ok: false },
-                  {
-                    onSuccess: () => toast.error(t('printing.markedFailed')),
-                  },
+                  { jobId: printedJobId, success: false },
+                  { onSuccess: () => toast.error(t('printing.markedFailed')) },
                 )
                 setPrintedJobId(null)
               }}
@@ -378,7 +398,7 @@ export default function PrintingPage() {
               onClick={() => {
                 if (!printedJobId) return
                 confirmJob.mutate(
-                  { jobId: printedJobId, ok: true },
+                  { jobId: printedJobId, success: true },
                   {
                     onSuccess: () => {
                       toast.success(t('printing.queueCleared'))

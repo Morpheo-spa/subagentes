@@ -31,7 +31,7 @@ const REGISTRY: { method: HttpMethod; template: string; base: RouteBase }[] = []
 function declare(method: HttpMethod, template: string, base: RouteBase = 'api') {
   REGISTRY.push({ method, template, base })
   return (params: Record<string, string> = {}): ApiRoute => {
-    const path = template.replace(/\{(\w+)\}/g, (match, name: string) => {
+    const path = template.replace(/\{(\w+)\}/g, (_match, name: string) => {
       const value = params[name]
       if (value === undefined) throw new Error(`Falta el parametro "${name}" de ${template}`)
       return encodeURIComponent(value)

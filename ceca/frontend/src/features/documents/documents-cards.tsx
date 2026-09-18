@@ -1,6 +1,6 @@
 import { Printer } from '@phosphor-icons/react'
 import { Guid } from '@/components/common/guid'
-import { StatusBadge } from '@/components/common/status-badge'
+import { ComplianceBadge, StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatDate, isExpiringSoon, truncateMiddle } from '@/lib/format'
@@ -31,17 +31,21 @@ export function DocumentsCards({
                 className="cursor-pointer text-left font-medium underline-offset-2 hover:underline"
                 onClick={() => onOpen(document)}
               >
-                {truncateMiddle(document.original_name, 36)}
+                {truncateMiddle(document.original_filename, 36)}
               </button>
               <StatusBadge status={document.status} expiresAt={document.expires_at} />
+              <ComplianceBadge status={document.compliance_status} />
               <p className="text-meta text-muted-foreground">
                 {t('documents.expiresOn', { date: formatDate(document.expires_at, locale) })}
               </p>
               <Guid value={document.id} short />
-              <Button variant="outline" onClick={() => onPrint(document)}>
-                <Printer size={20} aria-hidden="true" />
-                {t('documents.print')}
-              </Button>
+              {/* Un escaneo no se ofrece para etiqueta: no es un DeCA valido. */}
+              {document.is_valid_deca ? (
+                <Button variant="outline" onClick={() => onPrint(document)}>
+                  <Printer size={20} aria-hidden="true" />
+                  {t('documents.print')}
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
         </li>

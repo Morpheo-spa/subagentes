@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Prohibit } from '@phosphor-icons/react'
 import { EmptyState } from '@/components/common/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useAuth } from '@/lib/auth'
+import { useAuth, useSessionPermissions } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { hasPermission, type Permission } from '@/lib/permissions'
 
@@ -12,6 +12,7 @@ import { hasPermission, type Permission } from '@/lib/permissions'
  */
 export function ProtectedRoute({ permission }: { permission?: Permission }) {
   const { user, status } = useAuth()
+  const session = useSessionPermissions()
   const { t } = useI18n()
   const location = useLocation()
 
@@ -28,7 +29,7 @@ export function ProtectedRoute({ permission }: { permission?: Permission }) {
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
   }
 
-  if (permission && !hasPermission(user, permission)) {
+  if (permission && !hasPermission(session, permission)) {
     return (
       <EmptyState
         icon={Prohibit}

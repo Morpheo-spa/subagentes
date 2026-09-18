@@ -1,5 +1,5 @@
 import { ClockCounterClockwise, Printer, Prohibit, QrCode } from '@phosphor-icons/react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { CopyButton } from '@/components/common/copy-button'
@@ -18,9 +18,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ApiError } from '@/lib/api'
 import { formatBytes, formatDate, formatDateTime, formatNumber } from '@/lib/format'
 import { useI18n } from '@/lib/i18n'
-import { useDocument, useQueueForPrint, useRevokeToken, useWithdrawDocuments } from './documents-queries'
+import { useAddToQueue } from '@/features/printing/printing-queries'
+import {
+  useDocument,
+  useDocumentHistory,
+  useRevokeShare,
+  useWithdrawDocuments,
+} from './documents-queries'
 
-function Meta({ label, children }: { label: string; children: React.ReactNode }) {
+function Meta({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-meta text-muted-foreground">{label}</dt>
@@ -38,9 +44,10 @@ export function DocumentSheet({
 }) {
   const { t, locale } = useI18n()
   const detail = useDocument(documentId)
-  const queue = useQueueForPrint()
+  const history = useDocumentHistory(documentId)
+  const queue = useAddToQueue()
   const withdraw = useWithdrawDocuments()
-  const revoke = useRevokeToken()
+  const revoke = useRevokeShare()
   const [copies, setCopies] = useState(1)
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [revokeOpen, setRevokeOpen] = useState(false)
@@ -48,6 +55,8 @@ export function DocumentSheet({
 
   const document = detail.data
   const publicUrl = document?.public_url ?? null
+  const revisions = history.data?.revisions ?? []
+  const prints = history.data?.prints ?? []
 
   return (
     <Sheet open={Boolean(documentId)} onOpenChange={(open) => !open && onClose()}>
@@ -63,7 +72,7 @@ export function DocumentSheet({
         ) : document ? (
           <>
             <SheetHeader>
-              <SheetTitle>{document.original_name}</SheetTitle>
+              <SheetTitle>{document.original_filename}</SheetTitle>
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={document.status} expiresAt={document.expires_at} />
                 <ComplianceBadge status={document.compliance_status} />
@@ -80,7 +89,11 @@ export function DocumentSheet({
             ) : null}
 
             <div className="flex flex-col items-start gap-3">
-              <QrImage src={document.qr_url} documentName={document.original_name} size={200} />
+              <QrImage
+                documentId={document.id}
+                documentName={document.original_filename}
+                size={200}
+              />
               {publicUrl ? (
                 <div className="flex w-full items-center gap-2">
                   <code className="estampa-mono min-w-0 flex-1 truncate text-meta text-muted-foreground">
@@ -107,24 +120,26 @@ export function DocumentSheet({
                   <Meta label={t('documents.columns.guid')}>
                     <Guid value={document.id} />
                   </Meta>
-                  <Meta label={t('documents.size')}>{formatBytes(document.size_bytes, locale)}</Meta>
+                  <Meta label={t('documents.size')}>{formatBytes(document.byte_size, locale)}</Meta>
                   <Meta label={t('documents.columns.uploadedAt')}>
-                    {formatDateTime(document.uploaded_at, locale)}
+                    {formatDateTime(document.created_at, locale)}
                   </Meta>
-                  <Meta label={t('documents.uploadedBy')}>{document.uploaded_by}</Meta>
+                  <Meta label={t('documents.origin')}>{t(`origin.${document.origin}`)}</Meta>
                   <Meta label={t('documents.columns.expiresAt')}>
                     {formatDate(document.expires_at, locale)}
                   </Meta>
-                  <Meta label={t('documents.retention')}>
-                    {t('documents.retentionDays', {
-                      days: formatNumber(document.retention_days, locale),
-                    })}
+                  <Meta label={t('documents.revisionLabel')}>
+                    {formatNumber(document.revision, locale)}
                   </Meta>
                   <Meta label={t('documents.columns.prints')}>
                     {formatNumber(document.print_count, locale)}
                   </Meta>
                   <Meta label={t('documents.sha256')}>
-                    <code className="estampa-mono text-meta">{document.sha256.slice(0, 16)}…</code>
+                    {document.sha256 ? (
+                      <code className="estampa-mono text-meta">{document.sha256.slice(0, 16)}…</code>
+                    ) : (
+                      t('common.never')
+                    )}
                   </Meta>
                 </dl>
                 <Button variant="outline" className="mt-4" asChild>
@@ -134,14 +149,11 @@ export function DocumentSheet({
 
               <TabsContent value="revisions">
                 <ul className="flex flex-col gap-2">
-                  {document.revisions.map((revision) => (
-                    <li
-                      key={revision.id}
-                      className="rounded-md border border-border p-3 text-sm"
-                    >
+                  {revisions.map((revision) => (
+                    <li key={revision.id} className="rounded-md border border-border p-3 text-sm">
                       <p className="font-medium">
                         {t('documents.revisionN', { n: revision.revision })}
-                        {revision.superseded ? ` · ${t('documents.superseded')}` : ''}
+                        {revision.is_current ? '' : ` · ${t('documents.superseded')}`}
                       </p>
                       <p className="text-meta text-muted-foreground">
                         {formatDateTime(revision.created_at, locale)}
@@ -151,7 +163,7 @@ export function DocumentSheet({
                       ) : null}
                     </li>
                   ))}
-                  {document.revisions.length === 0 ? (
+                  {revisions.length === 0 ? (
                     <li className="text-sm text-muted-foreground">{t('documents.noRevisions')}</li>
                   ) : null}
                 </ul>
@@ -159,23 +171,24 @@ export function DocumentSheet({
 
               <TabsContent value="history">
                 <ul className="flex flex-col gap-2">
-                  {document.events.map((event) => (
-                    <li key={event.id} className="flex items-start gap-2 text-sm">
+                  {prints.map((entry) => (
+                    <li key={entry.print_job_id} className="flex items-start gap-2 text-sm">
                       <ClockCounterClockwise
                         size={16}
                         aria-hidden="true"
                         className="mt-1 shrink-0 text-muted-foreground"
                       />
                       <span>
-                        <span className="font-medium">{t(`documents.events.${event.kind}`)}</span>{' '}
+                        <span className="font-medium">
+                          {t('documents.printedCopies', { count: entry.copies })}
+                        </span>{' '}
                         <span className="text-muted-foreground">
-                          {formatDateTime(event.at, locale)}
-                          {event.actor ? ` · ${event.actor}` : ''}
+                          {formatDateTime(entry.printed_at, locale)}
                         </span>
                       </span>
                     </li>
                   ))}
-                  {document.events.length === 0 ? (
+                  {prints.length === 0 ? (
                     <li className="text-sm text-muted-foreground">{t('documents.noEvents')}</li>
                   ) : null}
                 </ul>
@@ -198,24 +211,30 @@ export function DocumentSheet({
                   onChange={(event) => setCopies(Math.max(1, Number(event.target.value) || 1))}
                 />
               </div>
-              <Button
-                onClick={() =>
-                  queue.mutate(
-                    [{ document_id: document.id, copies }],
-                    {
-                      onSuccess: () => toast.success(t('printing.addedWithCopies', { count: copies })),
-                      onError: (error) =>
-                        toast.error(
-                          error instanceof ApiError ? error.message : t('errors.unexpected'),
-                        ),
-                    },
-                  )
-                }
-                disabled={queue.isPending || Boolean(document.withdrawn_at)}
-              >
-                <Printer size={20} aria-hidden="true" />
-                {t('documents.addToQueue')}
-              </Button>
+              {/* Un escaneo no entra en la cola de etiquetas: no es un DeCA. */}
+              {document.is_valid_deca ? (
+                <Button
+                  onClick={() =>
+                    queue.mutate(
+                      { documentIds: [document.id], copies },
+                      {
+                        onSuccess: () =>
+                          toast.success(t('printing.addedWithCopies', { count: copies })),
+                        onError: (error) =>
+                          toast.error(
+                            error instanceof ApiError ? error.message : t('errors.unexpected'),
+                          ),
+                      },
+                    )
+                  }
+                  disabled={queue.isPending || Boolean(document.withdrawn_at)}
+                >
+                  <Printer size={20} aria-hidden="true" />
+                  {t('documents.addToQueue')}
+                </Button>
+              ) : (
+                <p className="text-sm text-destructive-text">{t('documents.notPrintable')}</p>
+              )}
               <Button variant="outline" onClick={() => setRevokeOpen(true)}>
                 <QrCode size={20} aria-hidden="true" />
                 {t('documents.revokeToken')}
@@ -231,7 +250,7 @@ export function DocumentSheet({
               onOpenChange={setWithdrawOpen}
               title={t('documents.withdrawTitle')}
               description={t('documents.withdrawBody')}
-              objectName={document.original_name}
+              objectName={document.original_filename}
               confirmLabel={t('documents.withdraw')}
               disabled={!reason.trim() || withdraw.isPending}
               extra={
@@ -248,7 +267,11 @@ export function DocumentSheet({
                 withdraw.mutate(
                   { ids: [document.id], reason },
                   {
-                    onSuccess: () => {
+                    onSuccess: ({ failed }) => {
+                      if (failed.length > 0) {
+                        toast.error(t('errors.unexpected'))
+                        return
+                      }
                       toast.success(t('documents.withdrawn'))
                       setWithdrawOpen(false)
                       onClose()
@@ -265,7 +288,7 @@ export function DocumentSheet({
               onOpenChange={setRevokeOpen}
               title={t('documents.revokeTitle')}
               description={t('documents.revokeBody')}
-              objectName={document.original_name}
+              objectName={document.original_filename}
               confirmLabel={t('documents.revokeToken')}
               disabled={revoke.isPending}
               onConfirm={() =>

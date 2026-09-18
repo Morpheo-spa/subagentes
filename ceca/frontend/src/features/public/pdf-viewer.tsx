@@ -2,13 +2,26 @@ import { useEffect, useRef, useState } from 'react'
 import { DownloadSimple } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { requestBlob } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import * as routes from '@/lib/routes'
 
 /**
  * Visor pdf.js con fallback a descarga (public-viewer.md).
  * pdf.js se carga bajo demanda: en movil y con mala red, primero la pagina.
+ *
+ * El PDF lo sirve `GET /v/{token}/file` por streaming; la URL del storage no
+ * sale de la API (CLAUDE.md §3.9).
  */
-export function PdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: string }) {
+export function PdfViewer({
+  token,
+  fileName,
+  fileHref,
+}: {
+  token: string
+  fileName: string
+  fileHref: string
+}) {
   const containerRef = useRef<HTMLDivElement>(null)
   const { t } = useI18n()
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading')
@@ -25,9 +38,9 @@ export function PdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: st
           import.meta.url,
         ).toString()
 
-        const response = await fetch(fileUrl, { credentials: 'omit' })
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const data = await response.arrayBuffer()
+        // `skipAuth`: el visor publico no manda token ni refresca sesion.
+        const blob = await requestBlob(routes.publicFile({ token }), { skipAuth: true })
+        const data = await blob.arrayBuffer()
         if (cancelled || !container) return
 
         const document_ = await pdfjs.getDocument({ data }).promise
@@ -62,7 +75,7 @@ export function PdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: st
     return () => {
       cancelled = true
     }
-  }, [fileUrl, fileName, t])
+  }, [token, fileName, t])
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -72,7 +85,7 @@ export function PdfViewer({ fileUrl, fileName }: { fileUrl: string; fileName: st
         <div className="flex flex-col items-center gap-4 rounded-lg border border-border bg-card p-6 text-center">
           <p className="text-base">{t('public.viewerFailed')}</p>
           <Button size="public" asChild>
-            <a href={fileUrl} download={fileName}>
+            <a href={fileHref} download={fileName}>
               <DownloadSimple size={24} aria-hidden="true" />
               {t('public.download')}
             </a>

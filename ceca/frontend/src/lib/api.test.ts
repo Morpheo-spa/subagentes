@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, request, setApiLocale, setAuthBridge } from './api'
+import * as routes from './routes'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -24,44 +25,46 @@ describe('cliente api', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     setApiLocale('en')
-    await request('/documents')
+    await request(routes.documentsList())
 
     const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Headers
     expect(headers.get('Accept-Language')).toBe('en')
   })
 
-  it('convierte {detail:{code,message}} en ApiError con code y message', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse(
-          { detail: { code: 'DOCUMENT_NOT_PDF', message: 'El fichero no es un PDF.' } },
-          422,
-        ),
-      ),
+  it('resuelve las rutas de API bajo /api/v1 y el visor publico en la raiz', async () => {
+    // Una respuesta nueva por llamada: un `Response` solo se puede leer una vez.
+    const fetchMock = vi.fn<(input: unknown, init?: unknown) => Promise<Response>>(() =>
+      Promise.resolve(jsonResponse({ ok: true })),
     )
+    vi.stubGlobal('fetch', fetchMock)
 
-    const error = await request('/documents/').catch((caught: unknown) => caught)
+    await request(routes.documentRead({ documentId: 'abc' }))
+    await request(routes.publicView({ token: 'tok' }), { skipAuth: true })
 
-    expect(error).toBeInstanceOf(ApiError)
-    expect((error as ApiError).code).toBe('DOCUMENT_NOT_PDF')
-    expect((error as ApiError).message).toBe('El fichero no es un PDF.')
-    expect((error as ApiError).status).toBe(422)
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/documents/abc')
+    // `public.router` se monta sin prefijo: `/v/{token}`, no `/api/v1/v/{token}`.
+    expect(fetchMock.mock.calls[1][0]).toBe('/v/tok')
   })
 
-  it('mapea detail.fields del validador DeCA a un objeto por campo', async () => {
+  it('usa el verbo que declara la ruta', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await request(routes.documentPatchDeca({ documentId: 'abc' }), { body: { deca: {} } })
+
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('PATCH')
+  })
+
+  it('convierte {detail:{code,message,params}} en ApiError', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse(
           {
             detail: {
-              code: 'DECA_INVALID',
-              message: 'Datos no válidos.',
-              fields: [
-                { field: 'cargador_nif', code: 'NIF_INVALID', message: 'NIF no válido' },
-                { field: 'mercancia_peso', code: 'MIN', message: 'Debe ser mayor que 0' },
-              ],
+              code: 'DOCUMENT_NOT_PDF',
+              message: 'El fichero no es un PDF.',
+              params: { filename: 'foto.jpg' },
             },
           },
           422,
@@ -69,14 +72,13 @@ describe('cliente api', () => {
       ),
     )
 
-    const error = (await request('/deca/generate', { method: 'POST' }).catch(
-      (caught: unknown) => caught,
-    )) as ApiError
+    const error = await request(routes.documentsList()).catch((caught: unknown) => caught)
 
-    expect(error.fields).toEqual({
-      cargador_nif: 'NIF no válido',
-      mercancia_peso: 'Debe ser mayor que 0',
-    })
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).code).toBe('DOCUMENT_NOT_PDF')
+    expect((error as ApiError).message).toBe('El fichero no es un PDF.')
+    expect((error as ApiError).status).toBe(422)
+    expect((error as ApiError).params).toEqual({ filename: 'foto.jpg' })
   })
 
   it('refresca el token UNA sola vez ante un 401 y reintenta', async () => {
@@ -90,7 +92,7 @@ describe('cliente api', () => {
     const onAuthFailure = vi.fn()
     setAuthBridge({ getToken: () => 'token-viejo', refresh, onAuthFailure })
 
-    const result = await request<{ ok: boolean }>('/documents')
+    const result = await request<{ ok: boolean }>(routes.documentsList())
 
     expect(result.ok).toBe(true)
     expect(refresh).toHaveBeenCalledTimes(1)
@@ -109,7 +111,7 @@ describe('cliente api', () => {
     const onAuthFailure = vi.fn()
     setAuthBridge({ getToken: () => 'token-viejo', refresh, onAuthFailure })
 
-    await expect(request('/documents')).rejects.toBeInstanceOf(ApiError)
+    await expect(request(routes.documentsList())).rejects.toBeInstanceOf(ApiError)
 
     expect(refresh).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledTimes(2)
@@ -119,15 +121,15 @@ describe('cliente api', () => {
   it('no intenta refrescar cuando skipAuth (login y visor publico)', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ detail: { code: 'BAD_CREDENTIALS', message: 'x' } }, 401))
+      .mockResolvedValue(jsonResponse({ detail: { code: 'INVALID_CREDENTIALS', message: 'x' } }, 401))
     vi.stubGlobal('fetch', fetchMock)
 
     const refresh = vi.fn()
     setAuthBridge({ getToken: () => null, refresh, onAuthFailure: vi.fn() })
 
-    await expect(request('/auth/login', { method: 'POST', skipAuth: true })).rejects.toBeInstanceOf(
-      ApiError,
-    )
+    await expect(
+      request(routes.authLogin(), { body: {}, skipAuth: true }),
+    ).rejects.toBeInstanceOf(ApiError)
     expect(refresh).not.toHaveBeenCalled()
   })
 })

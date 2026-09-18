@@ -1,10 +1,12 @@
 import {
+  ArrowUUpLeft,
   CheckCircle,
   Clock,
-  Printer,
+  ImageBroken,
+  PencilSimple,
   Prohibit,
+  SealCheck,
   Spinner,
-  Tag,
   WarningCircle,
   type Icon,
 } from '@phosphor-icons/react'
@@ -20,15 +22,16 @@ interface StatusVisual {
   spin?: boolean
 }
 
-/** MASTER §3: color + icono + texto. Nunca solo color. */
+/**
+ * MASTER §3: color + icono + texto. Nunca solo color.
+ * Los estados son los de `DocumentStatus` en `app/models/documents.py`.
+ */
 const STATUS_VISUALS: Record<DocumentStatus, StatusVisual> = {
-  uploading: { icon: Spinner, variant: 'neutral', key: 'status.uploading', spin: true },
+  pending: { icon: Spinner, variant: 'neutral', key: 'status.pending', spin: true },
   processing: { icon: Spinner, variant: 'neutral', key: 'status.processing', spin: true },
   ready: { icon: CheckCircle, variant: 'success', key: 'status.ready' },
-  queued: { icon: Printer, variant: 'secondary', key: 'status.queued' },
-  printed: { icon: Tag, variant: 'primary', key: 'status.printed' },
   withdrawn: { icon: Prohibit, variant: 'destructive', key: 'status.withdrawn' },
-  error: { icon: WarningCircle, variant: 'destructive', key: 'status.error' },
+  failed: { icon: WarningCircle, variant: 'destructive', key: 'status.failed' },
 }
 
 export function StatusBadge({
@@ -64,10 +67,12 @@ export function StatusBadge({
   )
 }
 
+/** `ComplianceStatus`: responde a "¿sirve como documento de control?". */
 const COMPLIANCE_VISUALS: Record<ComplianceStatus, StatusVisual> = {
-  DECA_OK: { icon: CheckCircle, variant: 'success', key: 'compliance.ok' },
-  DECA_INCOMPLETE: { icon: Clock, variant: 'warning', key: 'compliance.incomplete' },
-  NOT_A_DECA: { icon: Prohibit, variant: 'destructive', key: 'compliance.notADeca' },
+  compliant: { icon: SealCheck, variant: 'success', key: 'compliance.compliant' },
+  incomplete: { icon: PencilSimple, variant: 'warning', key: 'compliance.incomplete' },
+  not_a_deca: { icon: ImageBroken, variant: 'destructive', key: 'compliance.not_a_deca' },
+  superseded: { icon: ArrowUUpLeft, variant: 'neutral', key: 'compliance.superseded' },
 }
 
 /** docs/DECA.md §1: un escaneo NO es un DeCA valido y la UI lo dice. */

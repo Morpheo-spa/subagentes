@@ -29,10 +29,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { toast } from '@/components/ui/sonner'
 import { ApiError } from '@/lib/api'
-import { useAuth } from '@/lib/auth'
+import { useAuth, useSessionPermissions } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { hasPermission, PERMISSIONS, type Permission } from '@/lib/permissions'
-import type { Locale } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 interface NavEntry {
@@ -44,11 +43,11 @@ interface NavEntry {
 
 const NAV: NavEntry[] = [
   { to: '/upload', labelKey: 'nav.upload', icon: UploadSimple, permission: PERMISSIONS.documentsCreate },
-  { to: '/deca/new', labelKey: 'nav.deca', icon: FileText, permission: PERMISSIONS.decaWrite },
+  { to: '/deca/new', labelKey: 'nav.deca', icon: FileText, permission: PERMISSIONS.documentsCreate },
   { to: '/documents', labelKey: 'nav.documents', icon: FileText, permission: PERMISSIONS.documentsRead },
   { to: '/printing', labelKey: 'nav.printing', icon: Printer, permission: PERMISSIONS.printingRead },
   { to: '/billing', labelKey: 'nav.billing', icon: CreditCard, permission: PERMISSIONS.billingRead },
-  { to: '/admin', labelKey: 'nav.admin', icon: Gear, permission: PERMISSIONS.adminUsers },
+  { to: '/admin', labelKey: 'nav.admin', icon: Gear, permission: PERMISSIONS.usersRead },
 ]
 
 const COLLAPSE_KEY = 'estampa.sidebar.collapsed'
@@ -73,8 +72,8 @@ function useCollapsed() {
 
 function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const { t } = useI18n()
-  const { user } = useAuth()
-  const entries = NAV.filter((entry) => !entry.permission || hasPermission(user, entry.permission))
+  const session = useSessionPermissions()
+  const entries = NAV.filter((entry) => !entry.permission || hasPermission(session, entry.permission))
 
   return (
     <ul className="flex flex-col gap-1">
@@ -110,14 +109,14 @@ function NavList({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: (
 }
 
 function SiteSwitcher() {
-  const { user, switchSite } = useAuth()
+  const { site, sites, switchSite } = useAuth()
   const { t } = useI18n()
   const [busy, setBusy] = useState(false)
 
-  if (!user) return null
+  if (!site) return null
 
   const change = async (siteId: string) => {
-    if (siteId === user.site_id) return
+    if (siteId === site.id) return
     setBusy(true)
     try {
       await switchSite(siteId)
@@ -131,15 +130,16 @@ function SiteSwitcher() {
   }
 
   return (
-    <Select value={user.site_id} disabled={busy} onValueChange={(value) => void change(value)}>
+    <Select value={site.id} disabled={busy} onValueChange={(value) => void change(value)}>
       <SelectTrigger className="h-9 w-40 gap-2 sm:w-56" aria-label={t('shell.site')}>
         <Buildings size={16} aria-hidden="true" />
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {user.sites.map((site) => (
-          <SelectItem key={site.id} value={site.id}>
-            {site.name}
+        {/* `/auth/me` es lo unico que lista los sites del usuario. */}
+        {(sites.length > 0 ? sites.map((membership) => membership.site) : [site]).map((entry) => (
+          <SelectItem key={entry.id} value={entry.id}>
+            {entry.name}
           </SelectItem>
         ))}
       </SelectContent>
@@ -182,14 +182,8 @@ function UserMenu() {
 /** Sidebar 240px colapsable + topbar 56px (MASTER §5). */
 export function AppShell() {
   const { t } = useI18n()
-  const { updateLocale } = useAuth()
   const [collapsed, setCollapsed] = useCollapsed()
   const [mobileOpen, setMobileOpen] = useState(false)
-
-  const persistLocale = (locale: Locale) => {
-    // Preferencia del usuario en el servidor; si falla, la sesion local sigue valiendo.
-    void updateLocale(locale).catch(() => undefined)
-  }
 
   return (
     <div className="min-h-dvh bg-background">
@@ -226,7 +220,10 @@ export function AppShell() {
         <span className="font-bold tracking-tight">{t('app.name')}</span>
         <div className="ml-auto flex items-center gap-2">
           <SiteSwitcher />
-          <LanguageSelect onChange={persistLocale} />
+          {/* El idioma se queda en el cliente: no hay endpoint con el que un
+              usuario cambie su propio `locale` (`PATCH /users/{id}` es de
+              `users:manage`, y `/auth/me` es solo de lectura). */}
+          <LanguageSelect />
           <ThemeSelect />
           <UserMenu />
         </div>

@@ -1,70 +1,67 @@
-import { Label } from './label'
-import type { PrintQueueItem, PrintTemplate } from '@/lib/types'
+import { Label, labelSize } from './label'
+import type { LabelTemplateRead, QueueItemRead } from '@/lib/types'
 
-export interface SheetPlacement {
-  item: PrintQueueItem
+/** Cuantas etiquetas caben por hoja segun la plantilla del catalogo. */
+export function slotsPerPage(template: LabelTemplateRead): number {
+  if (template.layout === 'single') return 1
+  if (template.slots_per_sheet) return Math.max(1, template.slots_per_sheet)
+  return Math.max(1, (template.columns ?? 1) * (template.rows ?? 1))
 }
 
 /** Expande copias y respeta "empezar en la posicion N" (print-queue.md). */
 export function paginate(
-  items: PrintQueueItem[],
-  template: PrintTemplate,
+  items: QueueItemRead[],
+  template: LabelTemplateRead,
   startPosition: number,
-): (PrintQueueItem | null)[][] {
-  const perPage = template.mode === 'single' ? 1 : Math.max(1, template.columns * template.rows)
-  const expanded: PrintQueueItem[] = []
+): (QueueItemRead | null)[][] {
+  const perPage = slotsPerPage(template)
+  const expanded: QueueItemRead[] = []
   for (const item of items) {
     for (let copy = 0; copy < Math.max(1, item.copies); copy += 1) expanded.push(item)
   }
 
-  const offset = template.mode === 'single' ? 0 : Math.min(Math.max(0, startPosition - 1), perPage - 1)
-  const slots: (PrintQueueItem | null)[] = [...Array<null>(offset).fill(null), ...expanded]
+  const offset = perPage === 1 ? 0 : Math.min(Math.max(0, startPosition - 1), perPage - 1)
+  const slots: (QueueItemRead | null)[] = [...Array<null>(offset).fill(null), ...expanded]
 
-  const pages: (PrintQueueItem | null)[][] = []
+  const pages: (QueueItemRead | null)[][] = []
   for (let index = 0; index < slots.length; index += perPage) {
     const page = slots.slice(index, index + perPage)
     while (page.length < perPage) page.push(null)
     pages.push(page)
   }
-  return pages.length ? pages : []
+  return pages
 }
 
 /**
- * Hoja lista para imprimir. Este DOM es el que ve el usuario en la vista previa
- * y el que sale por la impresora: `@media print` solo oculta lo de alrededor.
+ * Vista previa de la hoja. La plantilla del backend NO trae tamano de pagina ni
+ * margenes (`LabelTemplateRead`), asi que aqui solo se coloca la rejilla de
+ * etiquetas con sus medidas reales; el folio definitivo lo compone el backend.
  */
 export function PrintSheet({
   items,
   template,
   startPosition,
-  tenantName,
-  scale = 1,
+  siteName,
 }: {
-  items: PrintQueueItem[]
-  template: PrintTemplate
+  items: QueueItemRead[]
+  template: LabelTemplateRead
   startPosition: number
-  tenantName: string | null
-  scale?: number
+  siteName: string | null
 }) {
   const pages = paginate(items, template, startPosition)
+  const size = labelSize(template)
+  const columns = template.layout === 'single' ? 1 : (template.columns ?? 1)
 
   return (
     <div className="estampa-print-root flex flex-col items-start gap-4">
       {pages.map((page, pageIndex) => (
         <div
           key={pageIndex}
-          className="estampa-sheet-page origin-top-left border border-border bg-print-paper"
+          className="estampa-sheet-page origin-top-left border border-border bg-print-paper p-[5mm]"
           style={{
-            width: `${template.page_width_mm}mm`,
-            height: `${template.page_height_mm}mm`,
-            paddingTop: `${template.margin_top_mm}mm`,
-            paddingLeft: `${template.margin_left_mm}mm`,
             display: 'grid',
-            gridTemplateColumns: `repeat(${template.mode === 'single' ? 1 : template.columns}, ${template.label_width_mm}mm)`,
-            gridAutoRows: `${template.label_height_mm}mm`,
-            columnGap: `${template.gap_x_mm}mm`,
-            rowGap: `${template.gap_y_mm}mm`,
-            transform: scale === 1 ? undefined : `scale(${scale})`,
+            gridTemplateColumns: `repeat(${columns}, ${size.width}mm)`,
+            gridAutoRows: `${size.height}mm`,
           }}
         >
           {page.map((item, slotIndex) =>
@@ -73,7 +70,7 @@ export function PrintSheet({
                 key={`${pageIndex}-${slotIndex}`}
                 item={item}
                 template={template}
-                tenantName={tenantName}
+                siteName={siteName}
               />
             ) : (
               <div key={`${pageIndex}-${slotIndex}`} aria-hidden="true" />

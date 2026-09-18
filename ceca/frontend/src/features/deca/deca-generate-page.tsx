@@ -1,17 +1,20 @@
-import { useMutation } from '@tanstack/react-query'
 import { FileText } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { ErrorState } from '@/components/common/error-state'
 import { PageHeader } from '@/components/common/page-header'
 import { toast } from '@/components/ui/sonner'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api, ApiError } from '@/lib/api'
+import { ApiError } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
-import type { DocumentSummary } from '@/lib/types'
+import type { DecaData, DocumentRead } from '@/lib/types'
+import { useAddToQueue } from '@/features/printing/printing-queries'
 import { DecaForm } from './deca-form'
 import { DecaResultCard } from './deca-result-card'
-import { useDecaFields } from './deca-queries'
+import { useDecaFields, useGenerateDeca, useValidateDeca } from './deca-queries'
 import type { DecaValues } from './deca-validation'
+
+/** Falta un obligatorio: el documento se archiva `incompleto`, no se rechaza. */
+const REQUIRED_CODE = 'DECA_FIELD_REQUIRED'
 
 /**
  * "Generar DeCA": crea el PDF NATIVO desde los datos del formulario.
@@ -20,34 +23,38 @@ import type { DecaValues } from './deca-validation'
 export default function DecaGeneratePage() {
   const { t } = useI18n()
   const catalog = useDecaFields()
-  const [created, setCreated] = useState<DocumentSummary | null>(null)
+  const [created, setCreated] = useState<DocumentRead | null>(null)
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({})
 
-  const generate = useMutation({
-    mutationFn: (values: DecaValues) =>
-      api.post<DocumentSummary>('/deca/generate', { values }),
-    onSuccess: (document) => {
-      setServerErrors({})
-      setCreated(document)
-      toast.success(t('deca.generatedToast'))
-    },
-    onError: (error) => {
-      if (error instanceof ApiError) {
-        setServerErrors(error.fields ?? {})
-        toast.error(error.message)
-      } else {
-        toast.error(t('errors.unexpected'))
-      }
-    },
-  })
+  const validate = useValidateDeca()
+  const generate = useGenerateDeca()
+  const queuePrint = useAddToQueue()
 
-  const queuePrint = useMutation({
-    mutationFn: (documentId: string) =>
-      api.post('/printing/queue', { items: [{ document_id: documentId, copies: 1 }] }),
-    onSuccess: () => toast.success(t('printing.addedToQueue', { count: 1 })),
-    onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : t('errors.unexpected')),
-  })
+  const submit = async (values: DecaValues) => {
+    const deca = values as DecaData
+    try {
+      // La verdad sobre los datos la da el backend (`POST /deca/validate`).
+      const verdict = await validate.mutateAsync(deca)
+      setServerErrors(
+        Object.fromEntries(verdict.errors.map((error) => [error.field, error.message])),
+      )
+      const blocking = verdict.errors.filter((error) => error.code !== REQUIRED_CODE)
+      if (blocking.length > 0) {
+        toast.error(blocking[0].message)
+        return
+      }
+
+      const document = await generate.mutateAsync({ deca })
+      setCreated(document)
+      toast.success(
+        document.deca_status === 'incompleto'
+          ? t('deca.generatedIncompleteToast')
+          : t('deca.generatedToast'),
+      )
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : t('errors.unexpected'))
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -69,11 +76,9 @@ export default function DecaGeneratePage() {
         <DecaForm
           fields={catalog.data.fields}
           submitLabel={t('deca.generateAction')}
-          submitting={generate.isPending}
+          submitting={generate.isPending || validate.isPending}
           serverErrors={serverErrors}
-          onSubmit={async (values) => {
-            await generate.mutateAsync(values).catch(() => undefined)
-          }}
+          onSubmit={submit}
         />
       )}
 
@@ -81,7 +86,16 @@ export default function DecaGeneratePage() {
         <DecaResultCard
           document={created}
           queueing={queuePrint.isPending}
-          onQueuePrint={() => queuePrint.mutate(created.id)}
+          onQueuePrint={() =>
+            queuePrint.mutate(
+              { documentIds: [created.id] },
+              {
+                onSuccess: () => toast.success(t('printing.addedToQueue', { count: 1 })),
+                onError: (error) =>
+                  toast.error(error instanceof ApiError ? error.message : t('errors.unexpected')),
+              },
+            )
+          }
         />
       ) : null}
     </div>

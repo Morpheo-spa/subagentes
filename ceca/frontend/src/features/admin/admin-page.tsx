@@ -34,7 +34,7 @@ function SitesTab() {
         <TableRow>
           <TableHead>{t('admin.sites.name')}</TableHead>
           <TableHead>{t('admin.sites.prefix')}</TableHead>
-          <TableHead>{t('admin.sites.users')}</TableHead>
+          <TableHead>{t('admin.sites.timezone')}</TableHead>
           <TableHead>{t('admin.sites.createdAt')}</TableHead>
         </TableRow>
       </TableHeader>
@@ -45,7 +45,7 @@ function SitesTab() {
             <TableCell>
               <code className="estampa-mono text-meta">{site.site_prefix}</code>
             </TableCell>
-            <TableCell>{formatNumber(site.users_count, locale)}</TableCell>
+            <TableCell>{site.timezone}</TableCell>
             <TableCell>{formatDate(site.created_at, locale)}</TableCell>
           </TableRow>
         ))}
@@ -55,16 +55,15 @@ function SitesTab() {
 }
 
 function UsersTab() {
-  const { t, locale, pick } = useI18n()
+  const { t, locale } = useI18n()
   const users = useAdminUsers()
   const roles = useRoles()
   if (users.isPending) return <Skeleton className="h-64 w-full" />
   if (users.isError) return <ErrorState error={users.error} onRetry={() => void users.refetch()} />
 
-  const roleLabel = (code: string) => {
-    const role = roles.data?.items.find((entry) => entry.code === code)
-    return role ? pick(role, 'name') : code
-  }
+  // Los codigos de rol son identificadores: no se traducen (rules/i18n.md).
+  const knownRole = (code: string) =>
+    roles.data?.roles.some((entry) => entry.code === code) ?? true
 
   return (
     <Table>
@@ -84,14 +83,19 @@ function UsersTab() {
             <TableCell>{user.email}</TableCell>
             <TableCell>
               <span className="flex flex-wrap gap-1">
-                {user.roles.map((role) => (
-                  <Badge key={role} variant="outline">
-                    {roleLabel(role)}
+                {user.memberships.map((membership) => (
+                  <Badge
+                    key={membership.id}
+                    variant={knownRole(membership.role) ? 'outline' : 'warning'}
+                  >
+                    <code className="estampa-mono">{membership.role}</code>
                   </Badge>
                 ))}
               </span>
             </TableCell>
-            <TableCell>{user.sites.map((site) => site.name).join(', ')}</TableCell>
+            <TableCell>
+              {user.memberships.map((membership) => membership.site_name).join(', ')}
+            </TableCell>
             <TableCell>
               {user.last_login_at ? formatDateTime(user.last_login_at, locale) : t('common.never')}
             </TableCell>
@@ -139,33 +143,38 @@ function StorageTab() {
               </TableCell>
               <TableCell>{t(`admin.storage.kinds.${backend.kind}`)}</TableCell>
               <TableCell>
+                {/* El backend solo dice si la ultima comprobacion fue bien. */}
                 <Badge
                   variant={
-                    backend.health === 'ok'
+                    backend.last_health_ok === true
                       ? 'success'
-                      : backend.health === 'down'
+                      : backend.last_health_ok === false
                         ? 'destructive'
-                        : 'warning'
+                        : 'neutral'
                   }
                 >
                   <HardDrives size={14} aria-hidden="true" />
-                  {t(`admin.storage.healths.${backend.health}`)}
+                  {t(
+                    backend.last_health_ok === null
+                      ? 'admin.storage.healths.unknown'
+                      : backend.last_health_ok
+                        ? 'admin.storage.healths.ok'
+                        : 'admin.storage.healths.down',
+                  )}
                 </Badge>
               </TableCell>
               <TableCell>
                 <dl className="flex flex-col gap-0.5 text-meta text-muted-foreground">
-                  {Object.entries(backend.public_config).map(([key, value]) => (
+                  {Object.entries(backend.config).map(([key, value]) => (
                     <div key={key} className="flex gap-1">
                       <dt>{key}:</dt>
-                      <dd className="estampa-mono">{value}</dd>
+                      <dd className="estampa-mono">{String(value)}</dd>
                     </div>
                   ))}
                 </dl>
               </TableCell>
               <TableCell>
-                {backend.last_checked_at
-                  ? formatDateTime(backend.last_checked_at, locale)
-                  : t('common.never')}
+                {formatDateTime(backend.updated_at, locale)}
               </TableCell>
             </TableRow>
           ))}
@@ -193,7 +202,7 @@ function RetentionTab() {
         const atMinimum = value <= policy.legal_minimum_days
         return (
           <div key={policy.id} className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
-            <p className="font-medium">{policy.site_name}</p>
+            <p className="font-medium">{policy.name}</p>
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`retention-${policy.id}`}>{t('admin.retention.days')}</Label>
@@ -215,7 +224,7 @@ function RetentionTab() {
                 disabled={update.isPending || value === policy.retention_days}
                 onClick={() =>
                   update.mutate(
-                    { id: policy.id, days: value },
+                    { id: policy.id, days: value, version: policy.version },
                     {
                       onSuccess: () => toast.success(t('admin.retention.saved')),
                       onError: (error) =>

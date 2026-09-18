@@ -2,19 +2,24 @@
  * Tanda de subida (upload.md).
  * En cola -> Subiendo % -> Procesando -> Listo | Error.
  * Nada de un toast por fichero: el recuento va por `aria-live` en la pagina.
+ *
+ * `POST /documents/` admite varios ficheros de golpe, pero aqui va uno por
+ * peticion: es la unica forma de dar progreso por fila y de que un fichero que
+ * falla no arrastre a los demas (el backend ya devuelve un resultado por
+ * fichero, `UploadItemResult`; con uno solo, es una lista de uno).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, ApiError, upload } from '@/lib/api'
-import type { DocumentSummary } from '@/lib/types'
+import { ApiError, request, upload } from '@/lib/api'
+import * as routes from '@/lib/routes'
+import {
+  WARNING_DUPLICATE,
+  WARNING_SCAN,
+  type DocumentSummary,
+  type UploadResponse,
+  type UploadWarning,
+} from '@/lib/types'
 
-export type BatchItemStatus =
-  | 'queued'
-  | 'uploading'
-  | 'processing'
-  | 'ready'
-  | 'error'
-  | 'duplicate'
-  | 'rejected'
+export type BatchItemStatus = 'queued' | 'uploading' | 'processing' | 'ready' | 'error' | 'rejected'
 
 export interface BatchItem {
   id: string
@@ -26,21 +31,19 @@ export interface BatchItem {
   errorCode: string | null
   errorMessage: string | null
   document: DocumentSummary | null
-  duplicateOf: DocumentSummary | null
+  /** Avisos del backend: duplicado, escaneo. El fichero se archiva igual. */
+  warnings: UploadWarning[]
 }
 
-export interface UploadResponse {
-  document: DocumentSummary | null
-  duplicate_of: DocumentSummary | null
-}
+/**
+ * Tope legal del fichero DeCA (docs/DECA.md §4: 5 MB por fichero).
+ *
+ * No hay endpoint que lo sirva: `GET /documents/limits` no existe en el
+ * backend. Es una constante de la norma, no una preferencia de tenant, asi que
+ * vive aqui; el backend vuelve a comprobarlo y la cuota del plan la aplica el.
+ */
+export const MAX_UPLOAD_BYTES = 5_000_000
 
-export interface ClientLimits {
-  max_upload_mb: number
-  accepted_content_types: string[]
-}
-
-/** Tope legal del fichero DeCA si la API aun no ha respondido (docs/DECA.md §4). */
-export const FALLBACK_MAX_UPLOAD_MB = 5
 const MAX_CONCURRENT = 3
 const POLL_INTERVAL_MS = 1500
 const POLL_MAX_TRIES = 60
@@ -58,56 +61,80 @@ function isPdf(file: File): boolean {
   return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
 }
 
-export function useUploadBatch(limits: ClientLimits | undefined) {
+export function hasWarning(item: BatchItem, code: string): boolean {
+  return item.warnings.some((warning) => warning.code === code)
+}
+
+export function isDuplicate(item: BatchItem): boolean {
+  return hasWarning(item, WARNING_DUPLICATE)
+}
+
+/**
+ * Un escaneo se archiva, pero NO es un DeCA valido: no se le ofrece etiqueta
+ * (docs/DECA.md §1 y MASTER §10 bis).
+ */
+export function isPrintable(item: BatchItem): boolean {
+  return item.status === 'ready' && Boolean(item.document?.is_valid_deca)
+}
+
+export function isScan(item: BatchItem): boolean {
+  return (
+    hasWarning(item, WARNING_SCAN) ||
+    item.document?.compliance_status === 'not_a_deca' ||
+    item.document?.origin === 'uploaded_scanned'
+  )
+}
+
+export function useUploadBatch() {
   const [items, setItems] = useState<BatchItem[]>([])
   const startedRef = useRef<Set<string>>(new Set())
   const abortersRef = useRef<Map<string, AbortController>>(new Map())
-  const maxBytes = (limits?.max_upload_mb ?? FALLBACK_MAX_UPLOAD_MB) * 1_000_000
 
   const patch = useCallback((id: string, changes: Partial<BatchItem>) => {
-    setItems((current) =>
-      current.map((item) => (item.id === id ? { ...item, ...changes } : item)),
-    )
+    setItems((current) => current.map((item) => (item.id === id ? { ...item, ...changes } : item)))
   }, [])
 
-  const addFiles = useCallback(
-    (files: File[]) => {
-      const created = files.map<BatchItem>((file) => {
-        const base: BatchItem = {
-          id: nextId(),
-          file,
-          name: file.name,
-          size: file.size,
-          status: 'queued',
-          progress: 0,
-          errorCode: null,
-          errorMessage: null,
-          document: null,
-          duplicateOf: null,
-        }
-        // Validacion en cliente ANTES de subir (upload.md).
-        if (!isPdf(file)) return { ...base, status: 'rejected', errorCode: REJECT_NOT_PDF }
-        if (file.size > maxBytes) return { ...base, status: 'rejected', errorCode: REJECT_TOO_LARGE }
-        return base
-      })
-      setItems((current) => [...current, ...created])
-      return created
-    },
-    [maxBytes],
-  )
+  const addFiles = useCallback((files: File[]) => {
+    const created = files.map<BatchItem>((file) => {
+      const base: BatchItem = {
+        id: nextId(),
+        file,
+        name: file.name,
+        size: file.size,
+        status: 'queued',
+        progress: 0,
+        errorCode: null,
+        errorMessage: null,
+        document: null,
+        warnings: [],
+      }
+      // Validacion en cliente ANTES de subir (upload.md).
+      if (!isPdf(file)) return { ...base, status: 'rejected', errorCode: REJECT_NOT_PDF }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        return { ...base, status: 'rejected', errorCode: REJECT_TOO_LARGE }
+      }
+      return base
+    })
+    setItems((current) => [...current, ...created])
+    return created
+  }, [])
 
   const pollUntilSettled = useCallback(
     async (id: string, documentId: string) => {
       for (let attempt = 0; attempt < POLL_MAX_TRIES; attempt += 1) {
         await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS))
         try {
-          const fresh = await api.get<DocumentSummary>(`/documents/${documentId}`)
-          if (fresh.status === 'ready' || fresh.status === 'printed' || fresh.status === 'queued') {
+          const fresh = await request<DocumentSummary>(routes.documentRead({ documentId }))
+          if (fresh.status === 'ready') {
             patch(id, { status: 'ready', progress: 100, document: fresh })
             return
           }
-          if (fresh.status === 'error') {
-            patch(id, { status: 'error', errorCode: 'DOCUMENT_PROCESSING_FAILED', document: fresh })
+          if (fresh.status === 'failed' || fresh.status === 'withdrawn') {
+            patch(id, {
+              status: 'error',
+              errorCode: 'DOCUMENT_PROCESSING_FAILED',
+              document: fresh,
+            })
             return
           }
         } catch (error) {
@@ -125,37 +152,50 @@ export function useUploadBatch(limits: ClientLimits | undefined) {
   )
 
   const runItem = useCallback(
-    async (item: BatchItem, force: boolean) => {
+    async (item: BatchItem) => {
       const controller = new AbortController()
       abortersRef.current.set(item.id, controller)
-      patch(item.id, { status: 'uploading', progress: 0, errorCode: null, errorMessage: null })
+      patch(item.id, {
+        status: 'uploading',
+        progress: 0,
+        errorCode: null,
+        errorMessage: null,
+        warnings: [],
+      })
 
       try {
         const result = await upload<UploadResponse>({
-          path: '/documents/',
-          file: item.file,
-          fields: force ? { force: 'true' } : {},
+          route: routes.documentsUpload(),
+          files: [item.file],
           signal: controller.signal,
           onProgress: (progress) => patch(item.id, { progress }),
         })
 
-        if (!result.document && result.duplicate_of) {
-          patch(item.id, { status: 'duplicate', duplicateOf: result.duplicate_of, progress: 100 })
-          return
-        }
-
-        const document = result.document
-        if (!document) {
+        const entry = result.items[0]
+        if (!entry) {
           patch(item.id, { status: 'error', errorCode: 'UPLOAD_EMPTY_RESPONSE' })
           return
         }
 
-        if (document.status === 'ready' || document.status === 'printed') {
-          patch(item.id, { status: 'ready', progress: 100, document })
+        // Un fichero rechazado es una fila con error, no una tanda perdida.
+        if (!entry.accepted || !entry.document) {
+          patch(item.id, {
+            status: 'error',
+            errorCode: entry.error?.code ?? 'UNKNOWN_ERROR',
+            errorMessage: entry.error?.message ?? null,
+            warnings: entry.warnings,
+          })
           return
         }
 
-        patch(item.id, { status: 'processing', progress: 100, document })
+        const document = entry.document
+        patch(item.id, { warnings: entry.warnings, document, progress: 100 })
+
+        if (document.status === 'ready') {
+          patch(item.id, { status: 'ready' })
+          return
+        }
+        patch(item.id, { status: 'processing' })
         await pollUntilSettled(item.id, document.id)
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
@@ -184,7 +224,7 @@ export function useUploadBatch(limits: ClientLimits | undefined) {
     )
     for (const item of pending.slice(0, Math.max(0, MAX_CONCURRENT - active))) {
       startedRef.current.add(item.id)
-      void runItem(item, false)
+      void runItem(item)
     }
   }, [items, runItem])
 
@@ -193,33 +233,9 @@ export function useUploadBatch(limits: ClientLimits | undefined) {
       const item = items.find((entry) => entry.id === id)
       if (!item) return
       startedRef.current.add(id)
-      void runItem(item, false)
+      void runItem(item)
     },
     [items, runItem],
-  )
-
-  /** "Subir igualmente" del aviso de duplicado. */
-  const uploadAnyway = useCallback(
-    (id: string) => {
-      const item = items.find((entry) => entry.id === id)
-      if (!item) return
-      void runItem(item, true)
-    },
-    [items, runItem],
-  )
-
-  /** "Usar existente": adopta el documento ya archivado. */
-  const useExisting = useCallback(
-    (id: string) => {
-      setItems((current) =>
-        current.map((item) =>
-          item.id === id && item.duplicateOf
-            ? { ...item, status: 'ready', document: item.duplicateOf, progress: 100 }
-            : item,
-        ),
-      )
-    },
-    [],
   )
 
   const remove = useCallback((id: string) => {
@@ -237,6 +253,7 @@ export function useUploadBatch(limits: ClientLimits | undefined) {
   }, [])
 
   const readyItems = items.filter((item) => item.status === 'ready' && item.document)
+  const printableItems = items.filter(isPrintable)
   const inFlight = items.some(
     (item) => item.status === 'uploading' || item.status === 'processing',
   )
@@ -245,17 +262,16 @@ export function useUploadBatch(limits: ClientLimits | undefined) {
     items,
     addFiles,
     retry,
-    uploadAnyway,
-    useExisting,
     remove,
     clear,
     readyItems,
+    printableItems,
     inFlight,
     counts: {
       total: items.length,
       ready: readyItems.length,
       errors: items.filter((item) => item.status === 'error' || item.status === 'rejected').length,
     },
-    maxBytes,
+    maxBytes: MAX_UPLOAD_BYTES,
   }
 }

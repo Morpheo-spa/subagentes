@@ -30,7 +30,7 @@ IGNORED_DIRECTORIES = {
 def _git_available() -> bool:
     try:
         subprocess.run(
-            ["git", "rev-parse", "--git-dir"],
+            ["git", "rev-parse", "--git-dir"],  # noqa: S607 (git from PATH is the point)
             cwd=REPO_ROOT,
             capture_output=True,
             check=True,
@@ -53,8 +53,8 @@ def test_every_backend_source_file_is_tracked() -> None:
     sources = _shipped_sources()
     assert sources, "found no backend sources; the glob above is wrong"
 
-    result = subprocess.run(
-        ["git", "check-ignore", "--no-index", *[str(p) for p in sources]],
+    result = subprocess.run(  # noqa: S603 (arguments are paths this test globbed itself)
+        ["git", "check-ignore", "--no-index", *[str(p) for p in sources]],  # noqa: S607
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

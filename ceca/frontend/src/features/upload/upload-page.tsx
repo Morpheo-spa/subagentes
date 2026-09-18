@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { FileArrowUp, Printer, SlidersHorizontal } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useBlocker, useNavigate } from 'react-router-dom'
@@ -15,41 +15,42 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { toast } from '@/components/ui/sonner'
+import { Progress } from '@/components/ui/progress'
 import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { api, ApiError } from '@/lib/api'
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import { toast } from '@/components/ui/sonner'
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ApiError, request } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import * as routes from '@/lib/routes'
+import type { DecaData, DocumentRead } from '@/lib/types'
 import { DecaForm } from '@/features/deca/deca-form'
 import { useDecaFields } from '@/features/deca/deca-queries'
 import type { DecaValues } from '@/features/deca/deca-validation'
+import { useAddToQueue } from '@/features/printing/printing-queries'
 import { UploadDropZone } from './upload-drop-zone'
 import { UploadRow } from './upload-row'
-import { useUploadBatch, type ClientLimits } from './use-upload-batch'
+import { useUploadBatch } from './use-upload-batch'
 
 export default function UploadPage() {
   const { t } = useI18n()
   const navigate = useNavigate()
   const [metadataOpen, setMetadataOpen] = useState(false)
+  const [applied, setApplied] = useState(0)
 
-  const limits = useQuery({
-    queryKey: ['documents', 'limits'],
-    queryFn: () => api.get<ClientLimits>('/documents/limits'),
-    staleTime: 10 * 60_000,
-  })
-
-  const batch = useUploadBatch(limits.data)
+  const batch = useUploadBatch()
   const catalog = useDecaFields()
+  const queuePrint = useAddToQueue()
 
   // upload.md: salir con subidas en curso -> AlertDialog.
-  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
-    batch.inFlight && currentLocation.pathname !== nextLocation.pathname,
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      batch.inFlight && currentLocation.pathname !== nextLocation.pathname,
   )
 
   useEffect(() => {
@@ -62,34 +63,57 @@ export default function UploadPage() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [batch.inFlight])
 
-  const queuePrint = useMutation({
-    mutationFn: (documentIds: string[]) =>
-      api.post('/printing/queue', {
-        items: documentIds.map((documentId) => ({ document_id: documentId, copies: 1 })),
-      }),
-    onSuccess: (_result, documentIds) => {
-      toast.success(t('printing.addedToQueue', { count: documentIds.length }))
-      navigate('/printing')
-    },
-    onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : t('errors.unexpected')),
-  })
-
+  /**
+   * No hay endpoint de lote para metadatos (`PATCH /documents/batch/deca` no
+   * existe): se aplica documento a documento con `PATCH /documents/{id}/deca`,
+   * con su progreso y sin que un fallo tumbe al resto.
+   */
   const applyMetadata = useMutation({
-    mutationFn: (values: DecaValues) =>
-      api.patch('/documents/batch/deca', {
-        document_ids: batch.readyItems.map((item) => item.document?.id).filter(Boolean),
-        values,
-      }),
-    onSuccess: () => {
-      toast.success(t('upload.metadataApplied', { count: batch.readyItems.length }))
+    mutationFn: async (values: DecaValues) => {
+      const targets = batch.readyItems.map((item) => item.document).filter(Boolean)
+      const failures: string[] = []
+      setApplied(0)
+      for (const [index, document] of targets.entries()) {
+        try {
+          await request<DocumentRead>(routes.documentPatchDeca({ documentId: document!.id }), {
+            body: { deca: values as DecaData },
+          })
+        } catch {
+          failures.push(document!.original_filename)
+        }
+        setApplied(index + 1)
+      }
+      return { total: targets.length, failures }
+    },
+    onSuccess: ({ total, failures }) => {
+      if (failures.length > 0) {
+        toast.error(t('upload.metadataPartial', { done: total - failures.length, total }))
+        return
+      }
+      toast.success(t('upload.metadataApplied', { count: total }))
       setMetadataOpen(false)
     },
     onError: (error) =>
       toast.error(error instanceof ApiError ? error.message : t('errors.unexpected')),
   })
 
-  const readyIds = batch.readyItems.map((item) => item.document?.id).filter((id): id is string => Boolean(id))
+  // Solo lo que es un DeCA valido entra en la cola de etiquetas.
+  const printableIds = batch.printableItems
+    .map((item) => item.document?.id)
+    .filter((id): id is string => Boolean(id))
+
+  const sendToPrint = (documentIds: string[]) =>
+    queuePrint.mutate(
+      { documentIds },
+      {
+        onSuccess: () => {
+          toast.success(t('printing.addedToQueue', { count: documentIds.length }))
+          navigate('/printing')
+        },
+        onError: (error) =>
+          toast.error(error instanceof ApiError ? error.message : t('errors.unexpected')),
+      },
+    )
 
   return (
     <div className="flex flex-col gap-6 pb-24">
@@ -141,9 +165,7 @@ export default function UploadPage() {
                 item={item}
                 onRetry={batch.retry}
                 onRemove={batch.remove}
-                onUploadAnyway={batch.uploadAnyway}
-                onUseExisting={batch.useExisting}
-                onPrint={(entry) => entry.document && queuePrint.mutate([entry.document.id])}
+                onPrint={(entry) => entry.document && sendToPrint([entry.document.id])}
               />
             ))}
           </TableBody>
@@ -162,11 +184,11 @@ export default function UploadPage() {
               })}
             </p>
             <Button
-              disabled={readyIds.length === 0 || queuePrint.isPending}
-              onClick={() => queuePrint.mutate(readyIds)}
+              disabled={printableIds.length === 0 || queuePrint.isPending}
+              onClick={() => sendToPrint(printableIds)}
             >
               <Printer size={20} aria-hidden="true" />
-              {t('upload.sendToPrint', { count: readyIds.length })}
+              {t('upload.sendToPrint', { count: printableIds.length })}
             </Button>
           </div>
         </div>
@@ -180,6 +202,15 @@ export default function UploadPage() {
               {t('upload.batchMetadataHelp', { count: batch.readyItems.length })}
             </SheetDescription>
           </SheetHeader>
+          {applyMetadata.isPending ? (
+            <Progress
+              value={Math.round((applied / Math.max(1, batch.readyItems.length)) * 100)}
+              aria-label={t('upload.metadataProgress', {
+                done: applied,
+                total: batch.readyItems.length,
+              })}
+            />
+          ) : null}
           {catalog.data ? (
             <DecaForm
               fields={catalog.data.fields}

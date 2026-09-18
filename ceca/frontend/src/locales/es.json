@@ -9,14 +9,13 @@
       "createdAt": "Creado",
       "name": "Nombre",
       "prefix": "Prefijo",
-      "users": "Usuarios"
+      "timezone": "Zona horaria"
     },
     "storage": {
       "config": "Configuración",
       "default": "Por defecto",
       "health": "Estado",
       "healths": {
-        "degraded": "Degradado",
         "down": "Caído",
         "ok": "Correcto",
         "unknown": "Sin comprobar"
@@ -24,8 +23,11 @@
       "kind": "Tipo",
       "kinds": {
         "ftp": "FTP",
+        "google_drive": "Google Drive",
         "local": "Disco local",
-        "s3": "S3"
+        "onedrive": "OneDrive",
+        "s3": "S3",
+        "sftp": "SFTP"
       },
       "lastChecked": "Última comprobación",
       "name": "Nombre",
@@ -65,17 +67,26 @@
     "disabledBody": "Esta instalación funciona sin módulo de pagos. No hay planes que contratar ni importes que abonar.",
     "disabledTitle": "Facturación no activada",
     "documentsUsed": "{used} de {included} documentos",
+    "documentsUsedNoLimit": "{used} documentos este periodo",
     "intervals": {
       "month": "mes",
       "year": "año"
     },
+    "labelsPrinted": "Etiquetas impresas: {count}",
+    "limits": {
+      "documents_per_month": "Documentos al mes",
+      "sites": "Centros",
+      "storage_gb": "Almacenamiento (GB)",
+      "users": "Usuarios"
+    },
     "noSubscription": "No hay ninguna suscripción activa.",
-    "period": "Periodo del {from} al {to}",
+    "periodLabel": "Periodo: {period}",
     "plans": "Planes",
     "renewsOn": "Se renueva el {date}",
     "statuses": {
       "active": "Activa",
       "canceled": "Cancelada",
+      "disabled": "Desactivada",
       "past_due": "Pago pendiente",
       "trialing": "En prueba"
     },
@@ -100,13 +111,25 @@
     "saving": "Guardando…"
   },
   "compliance": {
-    "incomplete": "Datos incompletos",
-    "notADeca": "No es un DeCA válido",
-    "ok": "DeCA válido"
+    "compliant": "Válido como DeCA",
+    "incomplete": "Faltan datos",
+    "not_a_deca": "Escaneo: no válido",
+    "superseded": "Sustituido por una revisión"
   },
   "deca": {
+    "blockHints": {
+      "cargador": "Quien contrata directamente con el transportista efectivo.",
+      "envio": "Origen, destino, fecha, vehículo y mercancía.",
+      "transportista": "Titular de la autorización al amparo de la cual se realiza el transporte."
+    },
+    "blocks": {
+      "cargador": "Cargador contractual",
+      "envio": "Envío y mercancía",
+      "transportista": "Transportista efectivo"
+    },
     "changeReason": "Motivo de la modificación",
     "changeReasonHelp": "Queda registrado junto a la revisión anterior, que se conserva marcada como sustituida.",
+    "changeReasonTooShort": "El motivo necesita al menos {min} caracteres.",
     "editSubtitle": "Documento: {name}",
     "editTitle": "Datos del DeCA",
     "errorSummary": "Revisa estos campos",
@@ -114,43 +137,38 @@
     "generateSubtitle": "Crea el documento de control desde los datos del envío.",
     "generateTitle": "Generar DeCA",
     "generated": "DeCA generado",
+    "generatedIncompleteToast": "DeCA generado, pero incompleto: faltan datos obligatorios.",
     "generatedToast": "DeCA generado correctamente",
-    "groupHints": {
-      "cargador": "Quien contrata directamente con el transportista efectivo.",
-      "envio": "Origen, destino y fecha del transporte.",
-      "mercancia": "Naturaleza y peso de la mercancía transportada.",
-      "otros": "Observaciones y reservas de las partes.",
-      "transportista": "Titular de la autorización al amparo de la cual se realiza el transporte."
-    },
-    "groups": {
-      "cargador": "Cargador contractual",
-      "envio": "Envío",
-      "mercancia": "Mercancía",
-      "otros": "Otros datos",
-      "transportista": "Transportista efectivo"
-    },
+    "incompleteNotice": "Faltan {count} campos obligatorios: se guardará como incompleto.",
     "legalRef": "(art. {ref})",
     "nativeNotice": "El PDF se genera de forma nativa desde estos datos, con el QR embebido. Es la única vía plenamente conforme: un escaneo no sirve.",
     "openInDocuments": "Abrir en Documentos",
+    "partiesNotDistinct": "El cargador contractual y el transportista efectivo no pueden tener el mismo NIF.",
     "revisionSaved": "Revisión creada",
     "saveRevision": "Crear una revisión",
     "saveValues": "Guardar los datos",
     "sendToPrint": "Enviar a impresión",
     "validation": {
-      "date": "Introduce una fecha válida.",
-      "max": "El valor máximo es {max}.",
       "maxLength": "Como mucho {max} caracteres.",
-      "min": "El valor mínimo es {min}.",
       "nif": "El NIF/CIF no es válido: revisa el dígito de control.",
-      "number": "Introduce un número válido.",
-      "option": "Elige una de las opciones.",
       "pattern": "El formato no es válido.",
-      "plate": "La matrícula no tiene un formato válido.",
-      "required": "Este campo es obligatorio."
-    }
+      "required": "Este campo es obligatorio.",
+      "type": {
+        "boolean": "Indica sí o no.",
+        "date": "Introduce una fecha válida.",
+        "datetime": "Introduce una fecha y hora válidas.",
+        "decimal": "Introduce un número mayor que cero.",
+        "enum": "Elige una de las opciones.",
+        "number": "Introduce un número mayor que cero.",
+        "string": "Introduce un texto válido.",
+        "text": "Introduce un texto válido."
+      }
+    },
+    "valuesSaved": "Datos guardados"
   },
   "documents": {
     "addToQueue": "Añadir a la cola de impresión",
+    "allCompliance": "Toda conformidad",
     "allStatuses": "Todos los estados",
     "bulkActions": "Acciones sobre la selección",
     "clearSelection": "Quitar la selección",
@@ -163,19 +181,12 @@
       "status": "Estado",
       "uploadedAt": "Subido"
     },
+    "compliance": "Conformidad",
     "copyPublicUrl": "Copiar la URL pública",
     "editDeca": "Editar los datos DeCA",
     "emptyBody": "Sube tu primer PDF y aparecerá aquí con su QR.",
     "emptyCta": "Subir un PDF",
     "emptyTitle": "Aún no hay documentos",
-    "events": {
-      "print": "Impresión",
-      "revision": "Revisión",
-      "revoke": "QR revocado",
-      "upload": "Subida",
-      "view": "Acceso por QR",
-      "withdraw": "Retirada"
-    },
     "expiresBefore": "Caduca antes de",
     "expiresOn": "Caduca el {date}",
     "exportCsv": "Exportar CSV",
@@ -186,11 +197,13 @@
     "noPublicUrl": "Este documento no tiene URL pública activa.",
     "noReason": "sin motivo registrado",
     "noRevisions": "No hay revisiones.",
+    "notPrintable": "Este documento no es un DeCA válido: no se puede imprimir su etiqueta.",
     "openDetail": "Ver el detalle",
+    "origin": "Origen",
     "print": "Imprimir",
+    "printedCopies": "{count} copias impresas",
     "resetFilters": "Limpiar filtros",
-    "retention": "Retención",
-    "retentionDays": "{days} días",
+    "revisionLabel": "Revisión",
     "revisionN": "Revisión {n}",
     "revokeBody": "El enlace público dejará de funcionar de inmediato. Documento:",
     "revokeTitle": "Revocar el QR",
@@ -213,11 +226,11 @@
       "revisions": "Revisiones"
     },
     "title": "Documentos",
-    "uploadedBy": "Subido por",
     "uploadedFrom": "Subido desde",
     "withdraw": "Retirar",
     "withdrawBody": "El fichero se retira del almacenamiento y el registro se conserva. Documento:",
     "withdrawBodyBulk": "Se retirarán los ficheros de {count} documentos; sus registros se conservan. Selección:",
+    "withdrawPartial": "Retirados {done} de {total}. Revisa el resto.",
     "withdrawReason": "Motivo de la retirada",
     "withdrawTitle": "Retirar el documento",
     "withdrawn": "Documento retirado",
@@ -240,6 +253,11 @@
     "printing": "Cola de impresión",
     "upload": "Subir PDFs"
   },
+  "origin": {
+    "generated": "Generado desde datos",
+    "uploaded_native": "PDF nativo subido",
+    "uploaded_scanned": "Escaneo subido"
+  },
   "pagination": {
     "label": "Paginación",
     "next": "Página siguiente",
@@ -253,11 +271,14 @@
     "confirmBody": "Se imprimirán {labels} etiquetas en {pages} páginas con la plantilla",
     "confirmTitle": "Imprimir la cola",
     "copies": "Copias",
+    "copiesCount": "{count} copias",
     "didItPrintBody": "Si todo ha salido bien vaciamos la cola. Si no, la mantenemos y marcamos el trabajo como fallido.",
     "didItPrintTitle": "¿Se imprimió bien?",
     "emptyBody": "Añade documentos desde el listado o desde una subida.",
     "emptyCta": "Ir a Documentos",
     "emptyTitle": "La cola está vacía",
+    "jobName": "Nombre del trabajo",
+    "jobNameHelp": "Solo es la etiqueta con la que queda registrado el trabajo. La impresora se elige en el diálogo de impresión del sistema.",
     "jobRegistered": "Trabajo de impresión registrado",
     "markedFailed": "Trabajo marcado como fallido",
     "mode": "Modo",
@@ -269,7 +290,6 @@
     "print": "Imprimir",
     "printFailed": "No, ha fallado",
     "printOk": "Sí, se imprimió",
-    "printer": "Impresora",
     "queueCleared": "Cola vaciada",
     "queueSection": "En cola",
     "removeBody": "Se quitará de la cola de impresión. Documento:",
@@ -280,17 +300,17 @@
     "startPosition": "Empezar en la posición",
     "subtitle": "Acumula etiquetas y lánzalas de una vez.",
     "summary": "{labels} etiquetas · {pages} páginas",
-    "systemPrinter": "Impresora del sistema",
     "template": "Plantilla",
     "title": "Cola de impresión"
   },
   "public": {
     "download": "Descargar el PDF",
+    "issuedOn": "Emitido el {date}",
     "openOrDownload": "Abrir o descargar",
     "pageOf": "Página {page} de {name}",
+    "revisionN": "Revisión {n}",
     "unavailableBody": "Este enlace no está disponible.",
     "unavailableTitle": "Documento no disponible",
-    "uploadedOn": "Subido el {date}",
     "viewerFailed": "No se ha podido mostrar el PDF en el navegador."
   },
   "qr": {
@@ -319,14 +339,12 @@
     }
   },
   "status": {
-    "error": "Error",
     "expiringSoon": "Caduca pronto",
-    "printed": "Impreso",
+    "failed": "Error",
+    "pending": "En cola",
     "processing": "Procesando",
-    "queued": "En cola de impresión",
     "queuedUpload": "En cola",
     "ready": "Listo",
-    "uploading": "Subiendo",
     "withdrawn": "Retirado"
   },
   "upload": {
@@ -343,14 +361,16 @@
     "copyUrl": "Copiar la URL pública",
     "dropHint": "Solo PDF, hasta {size} por archivo.",
     "dropTitle": "Arrastra aquí tus PDFs",
-    "duplicate": "Duplicado",
     "duplicateWarning": "Ya existe un archivo idéntico, subido el {date}.",
     "emptyBody": "Arrastra tus PDFs o usa el botón «Seleccionar archivos».",
     "emptyTitle": "Todavía no has añadido ningún archivo",
     "errorCodes": {
+      "DOCUMENT_IS_A_SCAN": "El PDF no tiene capa de texto: es un escaneo.",
       "DOCUMENT_PROCESSING_FAILED": "El procesado del documento ha fallado.",
       "DOCUMENT_PROCESSING_TIMEOUT": "El procesado está tardando demasiado.",
       "NETWORK_ERROR": "No hay conexión con el servidor.",
+      "QUOTA_EXCEEDED": "Has superado la cuota de tu plan.",
+      "TOO_MANY_FILES": "Demasiados archivos en una sola tanda.",
       "UNKNOWN_ERROR": "Error desconocido.",
       "UPLOAD_EMPTY_RESPONSE": "El servidor no ha devuelto el documento.",
       "UPLOAD_NOT_PDF": "Solo se admiten archivos PDF.",
@@ -361,6 +381,8 @@
     "leaveBody": "Si sales ahora, las subidas que no hayan terminado se cancelarán.",
     "leaveTitle": "Hay subidas en curso",
     "metadataApplied": "Datos aplicados a {count} documentos",
+    "metadataPartial": "Aplicados {done} de {total}. Revisa el resto.",
+    "metadataProgress": "Aplicando datos: {done} de {total}",
     "notADecaWarning": "Este PDF parece un escaneo o una foto: no es un DeCA válido. La norma exige un PDF nativo generado desde datos.",
     "print": "Añadir a la cola de impresión",
     "progressLabel": "Progreso de subida de {name}",
@@ -372,10 +394,8 @@
     "subtitle": "Archiva uno o varios albaranes y obtén su QR.",
     "summary": "{total} archivos · {ready} listos · {errors} con error",
     "title": "Subir PDFs",
-    "uploadAnyway": "Subir igualmente",
     "uploadingPercent": "Subiendo {percent} %",
     "urlCopied": "URL pública copiada",
-    "useExisting": "Usar el existente",
     "view": "Ver el documento"
   }
 }

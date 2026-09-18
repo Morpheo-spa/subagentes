@@ -9,31 +9,55 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/sonner'
-import { api, ApiError } from '@/lib/api'
+import { ApiError, request } from '@/lib/api'
 import { formatBytes, formatDate, formatMoney, formatNumber } from '@/lib/format'
-import { useAuth } from '@/lib/auth'
+import { useSessionPermissions } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
-import type { BillingResponse } from '@/lib/types'
+import * as routes from '@/lib/routes'
+import type {
+  CheckoutSessionResponse,
+  PlansResponse,
+  SubscriptionResponse,
+  UsageResponse,
+} from '@/lib/types'
+
+/** Clave del limite mensual de documentos en `plan.limits` (seed 0002). */
+const DOCUMENTS_LIMIT = 'documents_per_month'
+
+function limitOf(limits: Record<string, number | string | null>, key: string): number | null {
+  const value = limits[key]
+  return typeof value === 'number' ? value : null
+}
 
 /**
  * billing.md / CLAUDE.md: Stripe es desactivable (`BILLING_ENABLED`).
- * Si la API responde `{"enabled": false}` esto NO revienta: lo dice y oculta
- * cualquier CTA de pago.
+ * Las tres respuestas traen `enabled`; si viene a false esto NO revienta: lo
+ * dice y oculta cualquier CTA de pago.
  */
 export default function BillingPage() {
   const { t, locale, pick } = useI18n()
-  const { user } = useAuth()
-  const canManage = hasPermission(user, PERMISSIONS.billingManage)
+  const session = useSessionPermissions()
+  const canManage = hasPermission(session, PERMISSIONS.billingManage)
 
-  const billing = useQuery({
-    queryKey: ['billing'],
-    queryFn: () => api.get<BillingResponse>('/billing'),
+  const plans = useQuery({
+    queryKey: ['billing', 'plans'],
+    queryFn: () => request<PlansResponse>(routes.billingPlans()),
+  })
+  const subscription = useQuery({
+    queryKey: ['billing', 'subscription'],
+    queryFn: () => request<SubscriptionResponse>(routes.billingSubscription()),
+  })
+  const usage = useQuery({
+    queryKey: ['billing', 'usage'],
+    queryFn: () => request<UsageResponse>(routes.billingUsage()),
   })
 
   const checkout = useMutation({
     mutationFn: (planCode: string) =>
-      api.post<{ url: string }>('/billing/checkout', { plan_code: planCode }),
+      request<CheckoutSessionResponse>(routes.billingCheckout(), {
+        body: { plan_code: planCode },
+      }),
     onSuccess: (result) => {
       window.location.assign(result.url)
     },
@@ -41,7 +65,7 @@ export default function BillingPage() {
       toast.error(error instanceof ApiError ? error.message : t('errors.unexpected')),
   })
 
-  if (billing.isPending) {
+  if (plans.isPending || subscription.isPending || usage.isPending) {
     return (
       <div className="flex flex-col gap-4" aria-busy="true">
         <Skeleton className="h-9 w-64" />
@@ -51,9 +75,13 @@ export default function BillingPage() {
     )
   }
 
-  if (billing.isError) return <ErrorState error={billing.error} onRetry={() => void billing.refetch()} />
+  if (plans.isError) return <ErrorState error={plans.error} onRetry={() => void plans.refetch()} />
+  if (usage.isError) return <ErrorState error={usage.error} onRetry={() => void usage.refetch()} />
+  if (subscription.isError) {
+    return <ErrorState error={subscription.error} onRetry={() => void subscription.refetch()} />
+  }
 
-  if (!billing.data.enabled) {
+  if (!plans.data.enabled) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title={t('billing.title')} />
@@ -66,10 +94,11 @@ export default function BillingPage() {
     )
   }
 
-  const { plans, subscription, usage } = billing.data
+  const current = subscription.data.subscription
+  const included = limitOf(usage.data.limits, DOCUMENTS_LIMIT)
   const usedPercent =
-    usage.documents_included > 0
-      ? Math.min(100, Math.round((usage.documents_used / usage.documents_included) * 100))
+    included && included > 0
+      ? Math.min(100, Math.round((usage.data.documents_uploaded / included) * 100))
       : 0
 
   return (
@@ -82,20 +111,26 @@ export default function BillingPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
-            {t('billing.period', {
-              from: formatDate(usage.period_start, locale),
-              to: formatDate(usage.period_end, locale),
-            })}
+            {t('billing.periodLabel', { period: usage.data.period })}
           </p>
           <Progress value={usedPercent} aria-label={t('billing.usage')} />
           <p className="text-sm">
-            {t('billing.documentsUsed', {
-              used: formatNumber(usage.documents_used, locale),
-              included: formatNumber(usage.documents_included, locale),
+            {included !== null
+              ? t('billing.documentsUsed', {
+                  used: formatNumber(usage.data.documents_uploaded, locale),
+                  included: formatNumber(included, locale),
+                })
+              : t('billing.documentsUsedNoLimit', {
+                  used: formatNumber(usage.data.documents_uploaded, locale),
+                })}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {t('billing.labelsPrinted', {
+              count: formatNumber(usage.data.labels_printed, locale),
             })}
           </p>
           <p className="text-sm text-muted-foreground">
-            {t('billing.storageUsed', { size: formatBytes(usage.storage_bytes, locale) })}
+            {t('billing.storageUsed', { size: formatBytes(usage.data.bytes_stored, locale) })}
           </p>
         </CardContent>
       </Card>
@@ -105,20 +140,24 @@ export default function BillingPage() {
           <CardTitle>{t('billing.subscription')}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
-          {subscription ? (
+          {current ? (
             <>
               <p className="flex items-center gap-2">
-                <Badge variant={subscription.status === 'active' ? 'success' : 'warning'}>
+                <Badge variant={current.status === 'active' ? 'success' : 'warning'}>
                   <CreditCard size={14} aria-hidden="true" />
-                  {t(`billing.statuses.${subscription.status}`)}
+                  {t(`billing.statuses.${current.status}`)}
                 </Badge>
-                <span className="font-medium">{subscription.plan_code}</span>
+                <span className="font-medium">{current.plan_code}</span>
               </p>
-              {subscription.renews_at ? (
+              {current.current_period_end ? (
                 <p className="text-sm text-muted-foreground">
-                  {subscription.cancel_at_period_end
-                    ? t('billing.cancelsOn', { date: formatDate(subscription.renews_at, locale) })
-                    : t('billing.renewsOn', { date: formatDate(subscription.renews_at, locale) })}
+                  {current.cancel_at_period_end
+                    ? t('billing.cancelsOn', {
+                        date: formatDate(current.current_period_end, locale),
+                      })
+                    : t('billing.renewsOn', {
+                        date: formatDate(current.current_period_end, locale),
+                      })}
                 </p>
               ) : null}
             </>
@@ -129,37 +168,52 @@ export default function BillingPage() {
       </Card>
 
       <section aria-label={t('billing.plans')} className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {plans.map((plan) => (
-          <Card key={plan.id}>
-            <CardHeader>
-              <CardTitle>{pick(plan, 'name')}</CardTitle>
-              <p className="text-h2 font-bold">
-                {formatMoney(plan.price_cents, plan.currency, locale)}
-                <span className="text-sm font-normal text-muted-foreground">
-                  {' '}
-                  / {t(`billing.intervals.${plan.interval}`)}
-                </span>
-              </p>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <ul className="flex list-inside list-disc flex-col gap-1 text-sm text-muted-foreground">
-                {(locale === 'es' ? plan.features_es : plan.features_en).map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
-              {canManage ? (
-                <Button
-                  disabled={checkout.isPending || subscription?.plan_code === plan.code}
-                  onClick={() => checkout.mutate(plan.code)}
-                >
-                  {subscription?.plan_code === plan.code
-                    ? t('billing.currentPlan')
-                    : t('billing.choosePlan')}
-                </Button>
-              ) : null}
-            </CardContent>
-          </Card>
-        ))}
+        {[...plans.data.items]
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((plan) => (
+            <Card key={plan.code}>
+              <CardHeader>
+                <CardTitle>{pick(plan, 'name')}</CardTitle>
+                <p className="text-h2 font-bold">
+                  {formatMoney(plan.price_cents, plan.currency, locale)}
+                  <span className="text-sm font-normal text-muted-foreground">
+                    {' '}
+                    / {t(`billing.intervals.${plan.interval}`)}
+                  </span>
+                </p>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                {/* El plan trae `limits`, no una lista de textos comerciales. */}
+                <dl className="flex flex-col gap-1 text-sm text-muted-foreground">
+                  {Object.entries(plan.limits).map(([key, value]) => {
+                    const labelKey = `billing.limits.${key}`
+                    const label = t(labelKey)
+                    return (
+                      <div key={key} className="flex justify-between gap-2">
+                        {/* Un limite que el catalogo estrene se ve, no se oculta. */}
+                        <dt>
+                          {label === labelKey ? <code className="estampa-mono">{key}</code> : label}
+                        </dt>
+                        <dd className="font-medium">
+                          {typeof value === 'number' ? formatNumber(value, locale) : String(value)}
+                        </dd>
+                      </div>
+                    )
+                  })}
+                </dl>
+                {canManage ? (
+                  <Button
+                    disabled={checkout.isPending || current?.plan_code === plan.code}
+                    onClick={() => checkout.mutate(plan.code)}
+                  >
+                    {current?.plan_code === plan.code
+                      ? t('billing.currentPlan')
+                      : t('billing.choosePlan')}
+                  </Button>
+                ) : null}
+              </CardContent>
+            </Card>
+          ))}
       </section>
     </div>
   )

@@ -9,14 +9,13 @@
       "createdAt": "Created",
       "name": "Name",
       "prefix": "Prefix",
-      "users": "Users"
+      "timezone": "Time zone"
     },
     "storage": {
       "config": "Configuration",
       "default": "Default",
       "health": "Health",
       "healths": {
-        "degraded": "Degraded",
         "down": "Down",
         "ok": "Healthy",
         "unknown": "Not checked"
@@ -24,8 +23,11 @@
       "kind": "Kind",
       "kinds": {
         "ftp": "FTP",
+        "google_drive": "Google Drive",
         "local": "Local disk",
-        "s3": "S3"
+        "onedrive": "OneDrive",
+        "s3": "S3",
+        "sftp": "SFTP"
       },
       "lastChecked": "Last checked",
       "name": "Name",
@@ -65,17 +67,26 @@
     "disabledBody": "This installation runs without the payments module. There are no plans to buy and nothing to pay.",
     "disabledTitle": "Billing is not enabled",
     "documentsUsed": "{used} of {included} documents",
+    "documentsUsedNoLimit": "{used} documents this period",
     "intervals": {
       "month": "month",
       "year": "year"
     },
+    "labelsPrinted": "Labels printed: {count}",
+    "limits": {
+      "documents_per_month": "Documents per month",
+      "sites": "Sites",
+      "storage_gb": "Storage (GB)",
+      "users": "Users"
+    },
     "noSubscription": "There is no active subscription.",
-    "period": "Period from {from} to {to}",
+    "periodLabel": "Period: {period}",
     "plans": "Plans",
     "renewsOn": "Renews on {date}",
     "statuses": {
       "active": "Active",
       "canceled": "Cancelled",
+      "disabled": "Disabled",
       "past_due": "Past due",
       "trialing": "Trialing"
     },
@@ -100,13 +111,25 @@
     "saving": "Saving…"
   },
   "compliance": {
-    "incomplete": "Incomplete data",
-    "notADeca": "Not a valid DeCA",
-    "ok": "Valid DeCA"
+    "compliant": "Valid as a DeCA",
+    "incomplete": "Missing data",
+    "not_a_deca": "Scan: not valid",
+    "superseded": "Superseded by a revision"
   },
   "deca": {
+    "blockHints": {
+      "cargador": "The party contracting directly with the actual carrier.",
+      "envio": "Origin, destination, date, vehicle and goods.",
+      "transportista": "Holder of the authorisation under which the transport is performed."
+    },
+    "blocks": {
+      "cargador": "Contracting shipper",
+      "envio": "Shipment and goods",
+      "transportista": "Actual carrier"
+    },
     "changeReason": "Reason for the change",
     "changeReasonHelp": "Recorded alongside the previous revision, which is kept and marked as superseded.",
+    "changeReasonTooShort": "The reason needs at least {min} characters.",
     "editSubtitle": "Document: {name}",
     "editTitle": "DeCA data",
     "errorSummary": "Check these fields",
@@ -114,43 +137,38 @@
     "generateSubtitle": "Create the control document from the shipment data.",
     "generateTitle": "Generate DeCA",
     "generated": "DeCA generated",
+    "generatedIncompleteToast": "DeCA generated, but incomplete: required data is missing.",
     "generatedToast": "DeCA generated successfully",
-    "groupHints": {
-      "cargador": "Whoever contracts directly with the actual carrier.",
-      "envio": "Origin, destination and date of the transport.",
-      "mercancia": "Nature and weight of the goods carried.",
-      "otros": "Remarks and reservations from the parties.",
-      "transportista": "Holder of the authorisation under which the transport is carried out."
-    },
-    "groups": {
-      "cargador": "Contractual shipper",
-      "envio": "Shipment",
-      "mercancia": "Goods",
-      "otros": "Other data",
-      "transportista": "Actual carrier"
-    },
+    "incompleteNotice": "{count} required fields are missing: it will be saved as incomplete.",
     "legalRef": "(art. {ref})",
     "nativeNotice": "The PDF is generated natively from this data, with the QR embedded. It is the only fully compliant route: a scan does not qualify.",
     "openInDocuments": "Open in Documents",
+    "partiesNotDistinct": "The contracting shipper and the actual carrier cannot share the same tax ID.",
     "revisionSaved": "Revision created",
     "saveRevision": "Create a revision",
     "saveValues": "Save the data",
     "sendToPrint": "Send to printing",
     "validation": {
-      "date": "Enter a valid date.",
-      "max": "The maximum value is {max}.",
       "maxLength": "At most {max} characters.",
-      "min": "The minimum value is {min}.",
       "nif": "Invalid NIF/CIF: check the control digit.",
-      "number": "Enter a valid number.",
-      "option": "Choose one of the options.",
       "pattern": "The format is not valid.",
-      "plate": "The plate format is not valid.",
-      "required": "This field is required."
-    }
+      "required": "This field is required.",
+      "type": {
+        "boolean": "Choose yes or no.",
+        "date": "Enter a valid date.",
+        "datetime": "Enter a valid date and time.",
+        "decimal": "Enter a number greater than zero.",
+        "enum": "Choose one of the options.",
+        "number": "Enter a number greater than zero.",
+        "string": "Enter valid text.",
+        "text": "Enter valid text."
+      }
+    },
+    "valuesSaved": "Data saved"
   },
   "documents": {
     "addToQueue": "Add to print queue",
+    "allCompliance": "Any compliance",
     "allStatuses": "All statuses",
     "bulkActions": "Actions on the selection",
     "clearSelection": "Clear selection",
@@ -163,19 +181,12 @@
       "status": "Status",
       "uploadedAt": "Uploaded"
     },
+    "compliance": "Compliance",
     "copyPublicUrl": "Copy public URL",
     "editDeca": "Edit DeCA data",
     "emptyBody": "Upload your first PDF and it will show up here with its QR.",
     "emptyCta": "Upload a PDF",
     "emptyTitle": "No documents yet",
-    "events": {
-      "print": "Print",
-      "revision": "Revision",
-      "revoke": "QR revoked",
-      "upload": "Upload",
-      "view": "QR access",
-      "withdraw": "Withdrawal"
-    },
     "expiresBefore": "Expires before",
     "expiresOn": "Expires on {date}",
     "exportCsv": "Export CSV",
@@ -186,11 +197,13 @@
     "noPublicUrl": "This document has no active public URL.",
     "noReason": "no reason recorded",
     "noRevisions": "No revisions.",
+    "notPrintable": "This document is not a valid DeCA: its label cannot be printed.",
     "openDetail": "View details",
+    "origin": "Origin",
     "print": "Print",
+    "printedCopies": "{count} copies printed",
     "resetFilters": "Clear filters",
-    "retention": "Retention",
-    "retentionDays": "{days} days",
+    "revisionLabel": "Revision",
     "revisionN": "Revision {n}",
     "revokeBody": "The public link will stop working immediately. Document:",
     "revokeTitle": "Revoke the QR",
@@ -213,11 +226,11 @@
       "revisions": "Revisions"
     },
     "title": "Documents",
-    "uploadedBy": "Uploaded by",
     "uploadedFrom": "Uploaded from",
     "withdraw": "Withdraw",
     "withdrawBody": "The file is withdrawn from storage and the record is kept. Document:",
     "withdrawBodyBulk": "Files for {count} documents will be withdrawn; their records are kept. Selection:",
+    "withdrawPartial": "Withdrew {done} of {total}. Check the rest.",
     "withdrawReason": "Reason for withdrawal",
     "withdrawTitle": "Withdraw the document",
     "withdrawn": "Document withdrawn",
@@ -240,6 +253,11 @@
     "printing": "Print queue",
     "upload": "Upload PDFs"
   },
+  "origin": {
+    "generated": "Generated from data",
+    "uploaded_native": "Native PDF uploaded",
+    "uploaded_scanned": "Scan uploaded"
+  },
   "pagination": {
     "label": "Pagination",
     "next": "Next page",
@@ -253,11 +271,14 @@
     "confirmBody": "{labels} labels will be printed on {pages} pages using template",
     "confirmTitle": "Print the queue",
     "copies": "Copies",
+    "copiesCount": "{count} copies",
     "didItPrintBody": "If everything went well we clear the queue. If not, we keep it and mark the job as failed.",
     "didItPrintTitle": "Did it print correctly?",
     "emptyBody": "Add documents from the list or right after an upload.",
     "emptyCta": "Go to Documents",
     "emptyTitle": "The queue is empty",
+    "jobName": "Job name",
+    "jobNameHelp": "Just the label this job is recorded under. The printer itself is chosen in the system print dialog.",
     "jobRegistered": "Print job recorded",
     "markedFailed": "Job marked as failed",
     "mode": "Mode",
@@ -269,7 +290,6 @@
     "print": "Print",
     "printFailed": "No, it failed",
     "printOk": "Yes, it printed",
-    "printer": "Printer",
     "queueCleared": "Queue cleared",
     "queueSection": "In queue",
     "removeBody": "It will be removed from the print queue. Document:",
@@ -280,17 +300,17 @@
     "startPosition": "Start at position",
     "subtitle": "Collect labels and print them in one go.",
     "summary": "{labels} labels · {pages} pages",
-    "systemPrinter": "System printer",
     "template": "Template",
     "title": "Print queue"
   },
   "public": {
     "download": "Download the PDF",
+    "issuedOn": "Issued on {date}",
     "openOrDownload": "Open or download",
     "pageOf": "Page {page} of {name}",
+    "revisionN": "Revision {n}",
     "unavailableBody": "This link is not available.",
     "unavailableTitle": "Document unavailable",
-    "uploadedOn": "Uploaded on {date}",
     "viewerFailed": "The PDF could not be displayed in the browser."
   },
   "qr": {
@@ -319,14 +339,12 @@
     }
   },
   "status": {
-    "error": "Error",
     "expiringSoon": "Expiring soon",
-    "printed": "Printed",
+    "failed": "Failed",
+    "pending": "Queued",
     "processing": "Processing",
-    "queued": "In print queue",
     "queuedUpload": "Queued",
     "ready": "Ready",
-    "uploading": "Uploading",
     "withdrawn": "Withdrawn"
   },
   "upload": {
@@ -343,14 +361,16 @@
     "copyUrl": "Copy public URL",
     "dropHint": "PDF only, up to {size} per file.",
     "dropTitle": "Drop your PDFs here",
-    "duplicate": "Duplicate",
     "duplicateWarning": "An identical file already exists, uploaded on {date}.",
     "emptyBody": "Drop your PDFs or use the “Select files” button.",
     "emptyTitle": "No files added yet",
     "errorCodes": {
+      "DOCUMENT_IS_A_SCAN": "The PDF has no text layer: it is a scan.",
       "DOCUMENT_PROCESSING_FAILED": "Processing the document failed.",
       "DOCUMENT_PROCESSING_TIMEOUT": "Processing is taking too long.",
       "NETWORK_ERROR": "No connection to the server.",
+      "QUOTA_EXCEEDED": "You have exceeded your plan quota.",
+      "TOO_MANY_FILES": "Too many files in a single batch.",
       "UNKNOWN_ERROR": "Unknown error.",
       "UPLOAD_EMPTY_RESPONSE": "The server returned no document.",
       "UPLOAD_NOT_PDF": "Only PDF files are accepted.",
@@ -361,6 +381,8 @@
     "leaveBody": "If you leave now, unfinished uploads will be cancelled.",
     "leaveTitle": "Uploads in progress",
     "metadataApplied": "Data applied to {count} documents",
+    "metadataPartial": "Applied to {done} of {total}. Check the rest.",
+    "metadataProgress": "Applying data: {done} of {total}",
     "notADecaWarning": "This PDF looks like a scan or a photo: it is not a valid DeCA. The rules require a native PDF generated from structured data.",
     "print": "Add to print queue",
     "progressLabel": "Upload progress for {name}",
@@ -372,10 +394,8 @@
     "subtitle": "Archive one or more delivery notes and get their QR.",
     "summary": "{total} files · {ready} ready · {errors} failed",
     "title": "Upload PDFs",
-    "uploadAnyway": "Upload anyway",
     "uploadingPercent": "Uploading {percent}%",
     "urlCopied": "Public URL copied",
-    "useExisting": "Use the existing one",
     "view": "View document"
   }
 }

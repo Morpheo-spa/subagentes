@@ -1,7 +1,11 @@
 import { screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { detectLocale, translate } from '@/lib/i18n'
 import { renderWithProviders } from '@/test/render'
+
+/** El idioma lo decide el navegador del test: se compara por clave, no por texto. */
+const text = (key: string) => translate(detectLocale(), key)
 import PublicViewerPage from './public-viewer-page'
 
 function renderViewer(token: string) {
@@ -11,6 +15,24 @@ function renderViewer(token: string) {
         <Route path="/v/:token" element={<PublicViewerPage />} />
       </Routes>
     </MemoryRouter>,
+  )
+}
+
+/** `PublicDocumentView` tal y como lo devuelve `GET /v/{token}`. */
+function publicView(overrides: Record<string, unknown> = {}) {
+  return new Response(
+    JSON.stringify({
+      original_filename: 'albaran-2026-0001.pdf',
+      issued_at: '2026-09-01T10:00:00Z',
+      revision: 0,
+      is_valid_deca: true,
+      compliance_status: 'compliant',
+      deca: {},
+      file_url: '/v/token-valido/file',
+      site_name: 'Planta Norte',
+      ...overrides,
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
   )
 }
 
@@ -80,26 +102,27 @@ describe('visor publico', () => {
   })
 
   it('muestra el documento cuando el token es valido', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            original_name: 'albaran-2026-0001.pdf',
-            short_id: 'A1B2C3D4',
-            uploaded_at: '2026-09-01T10:00:00Z',
-            tenant_name: 'Planta Norte',
-            file_url: '/api/v1/public/tok/file',
-            size_bytes: 12345,
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
-      ),
-    )
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(publicView())))
 
     renderViewer('token-valido')
 
     await waitFor(() => expect(screen.getByText('albaran-2026-0001.pdf')).toBeInTheDocument())
     expect(screen.getByText('Planta Norte')).toBeInTheDocument()
+  })
+
+  it('un escaneo no se presenta como DeCA valido, tampoco en carretera', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(publicView({ is_valid_deca: false, compliance_status: 'not_a_deca' })),
+      ),
+    )
+
+    renderViewer('token-de-un-escaneo')
+
+    await waitFor(() =>
+      expect(screen.getByText(text('compliance.not_a_deca'))).toBeInTheDocument(),
+    )
+    expect(screen.queryByText(text('compliance.compliant'))).not.toBeInTheDocument()
   })
 })
