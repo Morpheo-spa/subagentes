@@ -61,13 +61,13 @@ def test_no_endpoint_is_fine() -> None:
 def test_private_endpoints_are_allowed_only_when_the_deployment_says_so(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A local MinIO must stay usable without opening the door in production."""
+    """The Garage of the same stack must stay usable without opening the door in production."""
     from app.config import get_settings
 
     get_settings.cache_clear()
     monkeypatch.setenv("ALLOW_PRIVATE_STORAGE_ENDPOINTS", "true")
     try:
-        assert validate_endpoint_url("http://10.0.0.5:9000") == "http://10.0.0.5:9000"
+        assert validate_endpoint_url("http://10.0.0.5:3900") == "http://10.0.0.5:3900"
     finally:
         get_settings.cache_clear()
 

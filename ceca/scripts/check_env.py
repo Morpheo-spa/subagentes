@@ -35,8 +35,10 @@ REQUIRED_KEYS = (
     # Infrastructure credentials: the compose services have no defaults left.
     "POSTGRES_PASSWORD",
     "REDIS_PASSWORD",
-    "MINIO_ROOT_USER",
-    "MINIO_ROOT_PASSWORD",
+    "GARAGE_RPC_SECRET",
+    "GARAGE_ADMIN_TOKEN",
+    "GARAGE_ACCESS_KEY",
+    "GARAGE_SECRET_KEY",
 )
 
 MINIMUM_LENGTHS = {
@@ -45,7 +47,8 @@ MINIMUM_LENGTHS = {
     "ACCESS_LOG_IP_SALT": 16,
     "POSTGRES_PASSWORD": 16,
     "REDIS_PASSWORD": 16,
-    "MINIO_ROOT_PASSWORD": 16,
+    "GARAGE_ADMIN_TOKEN": 16,
+    "GARAGE_SECRET_KEY": 32,
 }
 
 SECRET_KEYS = (
@@ -56,7 +59,9 @@ SECRET_KEYS = (
     "STRIPE_WEBHOOK_SECRET",
     "POSTGRES_PASSWORD",
     "REDIS_PASSWORD",
-    "MINIO_ROOT_PASSWORD",
+    "GARAGE_RPC_SECRET",
+    "GARAGE_ADMIN_TOKEN",
+    "GARAGE_SECRET_KEY",
 )
 
 PLACEHOLDER_PATTERN = re.compile(
@@ -66,9 +71,11 @@ PLACEHOLDER_PATTERN = re.compile(
 
 WEAK_VALUES = {"estampa", "postgres", "password", "admin", "test", "dev", "secret", "changeme"}
 
-# Shipped-by-default identities. A MinIO instance still answering to any of
+# Shipped-by-default identities. An object store still answering to any of
 # these is an open object store (audit E-06).
 DEFAULT_IDENTITIES = {"estampa", "minio", "minioadmin", "admin", "root", "access_key"}
+HEX_64 = re.compile(r"^[0-9a-fA-F]{64}$")
+GARAGE_KEY_ID = re.compile(r"^GK[0-9a-fA-F]{24}$")
 
 # Values this repository has shipped as defaults at some point. Any of them
 # still in place means the credential was never chosen.
@@ -233,13 +240,21 @@ def check_postgres(env: dict[str, str]) -> list[str]:
 
 
 def check_object_store(env: dict[str, str]) -> list[str]:
-    """MinIO must not still answer to the credentials the template ships with."""
+    """Garage's secrets have a shape; a wrong shape means it will not start."""
     problems: list[str] = []
-    user = env.get("MINIO_ROOT_USER", "").strip()
-    if user and user.lower() in DEFAULT_IDENTITIES:
-        problems.append(f"MINIO_ROOT_USER: default identity '{user}', pick an unguessable one")
-    if user and PLACEHOLDER_PATTERN.search(user):
-        problems.append("MINIO_ROOT_USER: still holds a placeholder value")
+    rpc = env.get("GARAGE_RPC_SECRET", "").strip()
+    if rpc and not HEX_64.match(rpc):
+        problems.append("GARAGE_RPC_SECRET: must be exactly 64 hexadecimal characters")
+    key_id = env.get("GARAGE_ACCESS_KEY", "").strip()
+    if key_id and key_id.lower() in DEFAULT_IDENTITIES:
+        problems.append(f"GARAGE_ACCESS_KEY: default identity '{key_id}', pick an unguessable one")
+    if key_id and PLACEHOLDER_PATTERN.search(key_id):
+        problems.append("GARAGE_ACCESS_KEY: still holds a placeholder value")
+    elif key_id and not GARAGE_KEY_ID.match(key_id):
+        problems.append("GARAGE_ACCESS_KEY: must be 'GK' followed by 24 hexadecimal characters")
+    secret = env.get("GARAGE_SECRET_KEY", "").strip()
+    if secret and not PLACEHOLDER_PATTERN.search(secret) and not HEX_64.match(secret):
+        problems.append("GARAGE_SECRET_KEY: must be exactly 64 hexadecimal characters")
     return problems
 
 

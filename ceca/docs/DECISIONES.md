@@ -265,3 +265,28 @@ actor, este ADR se sustituye.
 - `tests/test_retention_lock.py` demuestra con dos hilos y un Redis en memoria que el
   segundo barrido no procesa nada mientras el primero está dentro del lote.
 
+
+## ADR-008: Garage sustituye a MinIO como S3 del propio stack
+
+**Estado:** Aceptada (2026-09-19).
+
+**Contexto.** El compose traía `minio/minio:latest` con consola en 9001 y usuario root. En el
+primer arranque real en un equipo del usuario la imagen dio error, y MinIO ha dejado de ser
+una pieza estable para un stack pequeño: imágenes que cambian de contenido entre versiones,
+consola que hay que proteger, y una cuenta root con la que se hace todo.
+
+**Decisión.** El servicio `minio` pasa a ser `garage` (`dxflrs/garage`, versión fijada). Un
+binario estático sin shell ni consola; configuración en `infra/garage/garage.toml` (sin
+secretos: `GARAGE_RPC_SECRET` y `GARAGE_ADMIN_TOKEN` van por entorno); layout, bucket y clave
+de acceso se aplican con `scripts/garage_init.py` (`make garage-init`), idempotente, con una
+clave importada desde `.env` para que sea reproducible en vez de generada al vuelo.
+
+**Consecuencias.**
+- El puerto S3 local es el 3900 (`ALLOWED_PORTS` lo admite); un tenant que archive en el
+  Garage del stack usa `http://garage:3900`, región `garage`, `force_path_style=true`.
+- En desarrollo `ALLOW_PRIVATE_STORAGE_ENDPOINTS=true` en el overlay, porque `garage` es una
+  dirección privada; en producción sigue prohibido (`check_env`).
+- `check_env.py` valida la forma de los secretos de Garage (64 hex, `GK` + 24 hex).
+- Copia de seguridad: los volúmenes `garage_meta` y `garage_data` van siempre juntos.
+- Verificación pendiente: el servicio y el script no se han podido ejecutar en el entorno de
+  desarrollo remoto (sin demonio Docker); se validan en el primer `make up` real.

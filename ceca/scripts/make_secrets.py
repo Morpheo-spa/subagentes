@@ -13,6 +13,7 @@ is exactly what Fernet wants.
 from __future__ import annotations
 
 import base64
+import importlib.util
 import os
 import re
 import secrets
@@ -22,11 +23,21 @@ from pathlib import Path
 
 
 def fernet_key() -> str:
+    """A Fernet key: 32 random bytes, url-safe base64. cryptography is optional.
+
+    The broad except is deliberate: a half-installed cryptography (a system
+    package missing its cffi backend) raises a pyo3 panic, not ImportError,
+    and the fallback below is exactly what Fernet.generate_key() produces.
+    """
+    usable = all(importlib.util.find_spec(name) for name in ("cryptography", "_cffi_backend"))
+    if not usable:
+        return base64.urlsafe_b64encode(os.urandom(32)).decode()
     try:
         from cryptography.fernet import Fernet
-    except ImportError:
+
+        return Fernet.generate_key().decode()
+    except BaseException:  # noqa: BLE001
         return base64.urlsafe_b64encode(os.urandom(32)).decode()
-    return Fernet.generate_key().decode()
 
 
 def fill(body: str, key: str, value: str) -> str:
@@ -41,8 +52,12 @@ def fill_secrets(text: str) -> str:
     text = fill(text, "ACCESS_LOG_IP_SALT", secrets.token_urlsafe(24))
     text = fill(text, "POSTGRES_PASSWORD", postgres_password)
     text = fill(text, "REDIS_PASSWORD", redis_password)
-    text = fill(text, "MINIO_ROOT_USER", "estampa-" + secrets.token_hex(4))
-    text = fill(text, "MINIO_ROOT_PASSWORD", secrets.token_urlsafe(24))
+    # Garage: the RPC secret must be exactly 32 bytes in hex; an access key id
+    # is "GK" + 24 hex characters and its secret 64 hex characters.
+    text = fill(text, "GARAGE_RPC_SECRET", secrets.token_hex(32))
+    text = fill(text, "GARAGE_ADMIN_TOKEN", secrets.token_urlsafe(32))
+    text = fill(text, "GARAGE_ACCESS_KEY", "GK" + secrets.token_hex(12))
+    text = fill(text, "GARAGE_SECRET_KEY", secrets.token_hex(32))
     # The connection URLs carry the same passwords; check_env.py compares them.
     text = re.sub(
         r"(?m)^DATABASE_URL=(postgresql\+asyncpg://[^:@/]+:)CHANGE_ME[^@]*@",

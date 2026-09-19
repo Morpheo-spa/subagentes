@@ -1,0 +1,27 @@
+# Garage (S3-compatible object store) for the Estampa stack. One node.
+#
+# Secrets do not live here: GARAGE_RPC_SECRET and GARAGE_ADMIN_TOKEN come from
+# the environment (.env), which Garage reads over this file. The file is
+# mounted read-only into the container as /etc/garage.toml.
+#
+# Single-node layout: replication_factor = 1, capacity assigned by
+# scripts/garage_init.py on first start (Garage refuses to serve until a
+# layout is applied - that is by design, not a bug).
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+# rpc_secret: GARAGE_RPC_SECRET (64 hex characters)
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"
+
+[admin]
+api_bind_addr = "[::]:3903"
+# admin_token: GARAGE_ADMIN_TOKEN

@@ -38,7 +38,7 @@ Cambiarlo requiere aprobación explícita del usuario y un ADR nuevo en `docs/DE
 | postgres | 5432 | 5433 |
 | redis | 6379 | 6380 |
 | worker | - | - |
-| minio (Garage/S3 local) | 9000/9001 | 9000/9001 |
+| garage (S3 local) | 3900 (S3) / 3903 (admin) | 3900/3903 |
 
 ## Layout
 

@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     #: is resolved inside it, so nobody can archive outside the persistent volume.
     local_storage_root: str = "/var/lib/estampa/storage"
     #: Lets a tenant point an S3 endpoint at a private address. Needed for a
-    #: local MinIO or an on-premise Garage; a public deployment must leave it
+    #: Garage of the same stack or an on-premise store; a public deployment must leave it
     #: off, or a customer can aim our client at the cloud metadata service.
     allow_private_storage_endpoints: bool = False
 

@@ -40,7 +40,7 @@ Fecha de la última verificación: 2026-09-18. Rama: `claude/ceca-pdf-qr-manager
 | Traefik: TLS con Let's Encrypt, redirección, rate limits, cabeceras | Configuración estática y dinámica escritas y validadas como YAML. **Ningún certificado se ha emitido nunca** |
 | Regla del visor `PathPrefix(/v/) && !HeaderRegexp(Accept, text/html)` | Razonada, no probada con Traefik en marcha. Es la que decide si un QR escaneado abre el visor o recibe JSON |
 | Stripe | Código y dedup de eventos con tests; nunca contra la API de Stripe. Desactivado por `BILLING_ENABLED=false` |
-| Backends de storage S3 y FTP | Adaptadores con tests unitarios; no probados contra un MinIO/S3/FTP real |
+| Backends de storage S3 y FTP | Adaptadores con tests unitarios; no probados contra un Garage/S3/FTP real. El servicio `garage` del compose y `scripts/garage_init.py` están escritos, **no ejecutados** (aquí no hay demonio Docker) |
 
 ## 3. Antes del primer despliegue real
 
@@ -50,12 +50,13 @@ Por este orden. Cada punto tiene su procedimiento en `RUNBOOK.md`.
    dominio real, y el correo ACME en la copia de `infra/traefik/traefik.yml` que se
    monte vía `TRAEFIK_STATIC_CONFIG`.
 2. `python scripts/check_env.py .env` tiene que decir `deployable`. Rechaza `DEBUG`,
-   Redis sin contraseña, MinIO de fábrica, TLS apagado y el correo ACME de ejemplo.
+   Redis sin contraseña, secretos de Garage mal formados, TLS apagado y el correo ACME de ejemplo.
 3. `docker compose build` y **mirar que las dos imágenes construyen**. Es lo primero
    que no se ha podido hacer aquí.
 4. `make up-prod`. Comprobar `docker compose ps`: `api` tiene que quedar `healthy`
    (su healthcheck pregunta a `/health/ready`) y `scheduler` en marcha.
 5. `make migrate` y `make seed` **solo en staging**; en producción, `make migrate` a secas.
+   Si algún tenant archivará en el Garage del stack: `make garage-init` (una vez; idempotente).
 6. Escanear un QR con un móvil real contra el dominio real: debe abrir el visor de la
    SPA, no un JSON. Si abre JSON, la regla de Traefik del punto 2 de la tabla anterior
    es la sospechosa.

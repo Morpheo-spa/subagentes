@@ -5,7 +5,7 @@ Procedimientos para operar Estampa en producción. Todo comando asume que estás
 
 **En producción se despliega con el fichero base y nada más.** `docker-compose.dev.yml` ya no se
 llama `docker-compose.override.yml` justamente para que Compose no lo cargue solo: publicaba
-Postgres, Redis y MinIO, abría el panel de Traefik y arrancaba las imágenes `dev` como root con
+Postgres, Redis y Garage, abría el panel de Traefik y arrancaba las imágenes `dev` como root con
 `DEBUG=true`. En el servidor:
 
 ```bash
@@ -24,8 +24,8 @@ Antes de cualquier despliegue:
 python scripts/check_env.py .env.production   # falla y no despliegas
 ```
 
-Ese script rechaza además un entorno de producción con Redis sin contraseña, MinIO con las
-credenciales de fábrica, `DEBUG=true` o el proxy sin TLS (§7, §8).
+Ese script rechaza además un entorno de producción con Redis sin contraseña, secretos de Garage
+con forma incorrecta o de fábrica, `DEBUG=true` o el proxy sin TLS (§7, §8).
 
 ---
 
@@ -55,7 +55,8 @@ los PDF: son ficheros en el almacenamiento del tenant.
 Depende del backend de cada site (`storage_backends.kind`):
 
 - `local`: respalda el volumen `api_local_storage`.
-- `s3` / MinIO: versionado del bucket activado **y** replicación a otra región o proveedor.
+- `s3` / Garage: respaldar los volúmenes `garage_meta` y `garage_data` juntos (los metadatos
+  sin los datos no sirven) **y** replicación a otra región o proveedor.
 - `ftp` / `sftp` / nubes del cliente: el respaldo es responsabilidad del cliente. Debe constar
   por escrito en el contrato; el plazo legal de conservación es suyo.
 

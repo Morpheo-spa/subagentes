@@ -28,7 +28,8 @@ from app.config import get_settings
 from app.errors import DomainError
 
 ALLOWED_SCHEMES = frozenset({"http", "https"})
-ALLOWED_PORTS = frozenset({80, 443, 9000, 9001, 8333})
+# 3900 is Garage, 9000 MinIO/RustFS, 8333 SeaweedFS: the S3-compatible stores.
+ALLOWED_PORTS = frozenset({80, 443, 3900, 9000, 9001, 8333})
 
 # Carrier-grade NAT (RFC 6598). Python does not count it as private, and at
 # least one cloud (Alibaba) serves its instance metadata from 100.100.100.200.
@@ -63,7 +64,7 @@ def validate_endpoint_url(url: str | None, *, resolve: bool = True) -> str | Non
     that answers with one public and one private address must not pass.
 
     Private addresses are allowed only when the deployment says so, which is how
-    a local MinIO or a self-hosted Garage on the same network stays usable.
+    the Garage of this same stack or a self-hosted store on the LAN stays usable.
 
     ``resolve=False`` skips the DNS lookup and checks only what needs no
     network: scheme, port, and a literal address. That is the form the storage

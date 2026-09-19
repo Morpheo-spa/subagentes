@@ -101,15 +101,16 @@ def test_redis_requires_a_password() -> None:
 
 def test_the_data_stores_have_no_built_in_credentials() -> None:
     store_env = {
-        name: services(BASE_COMPOSE)[name].get("environment", {}) for name in ("postgres", "minio")
+        name: services(BASE_COMPOSE)[name].get("environment", {})
+        for name in ("postgres", "garage")
     }
     required = [
         value
         for environment in store_env.values()
         for key, value in environment.items()
-        if "PASSWORD" in key or key == "MINIO_ROOT_USER"
+        if "PASSWORD" in key or key in {"GARAGE_RPC_SECRET", "GARAGE_ADMIN_TOKEN"}
     ]
-    assert required, "expected credential variables on postgres and minio"
+    assert required, "expected credential variables on postgres and garage"
     for value in required:
         assert ":?" in value, f"{value} still has a built-in default"
 
@@ -197,7 +198,7 @@ def test_production_without_debug_still_starts(monkeypatch: pytest.MonkeyPatch) 
 
 def test_the_template_carries_no_usable_secret() -> None:
     text = ENV_EXAMPLE.read_text(encoding="utf-8")
-    for key in ("REDIS_PASSWORD", "POSTGRES_PASSWORD", "MINIO_ROOT_PASSWORD"):
+    for key in ("REDIS_PASSWORD", "POSTGRES_PASSWORD", "GARAGE_RPC_SECRET", "GARAGE_SECRET_KEY"):
         line = next(line for line in text.splitlines() if line.startswith(f"{key}="))
         assert "CHANGE_ME" in line, line
     assert "TRUSTED_PROXY_COUNT=1" in text
@@ -226,9 +227,17 @@ def test_check_env_rejects_a_url_whose_password_drifted() -> None:
 def test_check_env_rejects_default_object_store_credentials() -> None:
     check_env = load_check_env()
 
-    assert check_env.check_object_store({"MINIO_ROOT_USER": "minioadmin"})
-    assert check_env.check_object_store({"MINIO_ROOT_USER": "estampa"})
-    assert not check_env.check_object_store({"MINIO_ROOT_USER": "estampa-9f2c11a4"})
+    assert check_env.check_object_store({"GARAGE_ACCESS_KEY": "minioadmin"})
+    assert check_env.check_object_store({"GARAGE_ACCESS_KEY": "estampa"})
+    assert check_env.check_object_store({"GARAGE_RPC_SECRET": "short"})
+    assert check_env.check_object_store({"GARAGE_ACCESS_KEY": "GKnothex"})
+    assert not check_env.check_object_store(
+        {
+            "GARAGE_RPC_SECRET": "ab" * 32,
+            "GARAGE_ACCESS_KEY": "GK" + "0f" * 12,
+            "GARAGE_SECRET_KEY": "9c" * 32,
+        }
+    )
 
 
 def test_check_env_rejects_a_proxy_without_tls(tmp_path: Path) -> None:
@@ -316,3 +325,14 @@ def test_make_secrets_fills_every_placeholder_consistently(tmp_path: Path) -> No
     assert check_env.check_object_store(env) == []
     assert check_env.check_storage_key(env) == []
     assert check_env.check_secrets(env) == []
+
+
+def test_the_object_store_is_garage_with_a_read_only_config_and_no_console() -> None:
+    garage = services(BASE_COMPOSE)["garage"]
+    assert garage["image"].startswith("dxflrs/garage:v")
+    assert not garage.get("ports"), "Garage is reachable only inside the compose network"
+    assert any(mount.endswith("/etc/garage.toml:ro") for mount in garage["volumes"])
+    config = (REPO_ROOT / "infra" / "garage" / "garage.toml").read_text(encoding="utf-8")
+    assert "rpc_secret =" not in config, "the RPC secret comes from the environment, not the file"
+    assert "admin_token =" not in config
+    assert 'api_bind_addr = "[::]:3900"' in config

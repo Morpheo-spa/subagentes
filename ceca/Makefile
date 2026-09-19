@@ -23,6 +23,10 @@ env: ## Create .env from the template if it does not exist
 secrets: env ## Replace the CHANGE_ME placeholders in .env with fresh secrets
 	@$(PY) scripts/make_secrets.py .env
 
+.PHONY: garage-init
+garage-init: ## Apply the single-node layout, bucket and access key to the running Garage
+	$(PY) scripts/garage_init.py
+
 .PHONY: up
 up: env ## Start the development stack (base + dev overlay)
 	$(COMPOSE_DEV) up --build -d

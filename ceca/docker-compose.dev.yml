@@ -32,6 +32,9 @@ services:
     environment:
       ENVIRONMENT: local
       DEBUG: "true"
+      # The Garage of this same stack is a private address; in development a
+      # tenant backend may point at it. Never in production (audit N-13).
+      ALLOW_PRIVATE_STORAGE_ENDPOINTS: "true"
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -45,6 +48,7 @@ services:
     environment:
       ENVIRONMENT: local
       DEBUG: "true"
+      ALLOW_PRIVATE_STORAGE_ENDPOINTS: "true"
     volumes:
       - ./backend:/app
       - api_local_storage:/var/lib/estampa/storage
@@ -64,8 +68,8 @@ services:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
 
-  # Direct access to the data stores, for psql / redis-cli / the MinIO console.
-  # The base file keeps all of these on the internal network only.
+  # Direct access to the data stores, for psql / redis-cli / an S3 client
+  # against Garage. The base file keeps all of these on the internal network only.
   postgres:
     ports:
       - "127.0.0.1:5433:5432"
@@ -74,10 +78,10 @@ services:
     ports:
       - "127.0.0.1:6380:6379"
 
-  minio:
+  garage:
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+      - "127.0.0.1:3900:3900"
+      - "127.0.0.1:3903:3903"
 
   traefik:
     # A different static configuration, not extra flags: when --configFile is

@@ -38,13 +38,14 @@ transporte interior, y los ficheros se conservan **un año como mínimo**.
 ```bash
 cp .env.example .env     # 1. plantilla de entorno
 make secrets             # 2. genera JWT_SECRET_KEY, STORAGE_SECRET_KEY (Fernet) y el salt
-make up                        # 3. traefik, postgres, redis, minio, api, worker, frontend
+make up                  # 3. traefik, postgres, redis, garage, api, worker, frontend
 make migrate             # 4. alembic upgrade head (crea el esquema y siembra planes y campos DECA)
 make seed                # 5. tenant de demostración con usuarios, documentos y política
 ```
 
-Luego: <http://localhost> (aplicación), <http://localhost:8080> (panel de Traefik),
-<http://localhost:9001> (consola de MinIO).
+Luego: <http://localhost> (aplicación) y <http://localhost:8080> (panel de Traefik).
+Para archivar en S3 dentro del propio stack, `make garage-init` (una vez) crea el layout, el
+bucket y la clave de acceso de Garage con los valores de `.env`.
 
 Antes de desplegar a producción, **obligatorio**:
 
@@ -86,7 +87,7 @@ ceca/
 ```
 
 Puertos locales: aplicación en `80`, panel de Traefik en `8080`, Postgres en `5433`,
-Redis en `6380`, MinIO en `9000` / `9001`.
+Redis en `6380`, Garage (S3) en `3900` y su API de administración en `3903`.
 
 ---
 

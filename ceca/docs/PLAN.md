@@ -27,7 +27,7 @@ Leyenda: **Hecho** · **En curso** · **Pendiente**
 | `0001_initial.py` | Hecho | Escrita a mano; verificada columna a columna contra los modelos |
 | `0002_seed_plans.py` | Hecho | free / pro / business, idempotente |
 | `0003_seed_deca_fields.py` | Hecho | Lee `app/i18n/deca_fields.json`, no lo duplica |
-| `docker-compose.yml` + override de desarrollo | Hecho | traefik, postgres, redis, minio, api, worker, frontend |
+| `docker-compose.yml` + override de desarrollo | Hecho | traefik, postgres, redis, garage, api, worker, frontend |
 | Traefik estático + dinámico | Hecho | Cabeceras de seguridad, `noindex` en `/v/`, rate limit en login y visor |
 | `.env.example` + `scripts/check_env.py` | Hecho | Validado: acepta un entorno correcto y rechaza la plantilla |
 | `scripts/ci.sh` | Hecho | Gate local y de CI |
