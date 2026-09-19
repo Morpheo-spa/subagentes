@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from starlette.datastructures import FormData, UploadFile
-from starlette.formparsers import MultiPartException, MultiPartParser
+from starlette.formparsers import MultiPartException, MultiPartParser, MultipartPart
 
 from app.config import Settings, get_settings
 from app.deps import Db, Language, TenantContext, require_permission
@@ -169,6 +169,37 @@ async def _capped_stream(request: Request, maximum: int) -> AsyncGenerator[bytes
         yield chunk
 
 
+class _FilePartTooLarge(MultiPartException):
+    def __init__(self, filename: str) -> None:
+        super().__init__(f"File part {filename!r} exceeded the per-file limit.")
+        self.filename = filename
+
+
+class _BoundedMultiPartParser(MultiPartParser):
+    """Starlette's parser, with a ceiling on each *file* part as it arrives.
+
+    ``max_part_size`` only bounds parts without a filename; a part with one is
+    spooled to disk without any limit of its own, so a single 500 MB "PDF" was
+    written out in full before the service got to refuse it at 5 MB (audit
+    N-07). Here the count runs in ``on_part_data``, on the bytes of the part
+    seen so far, so the request is cut off at the limit, not after it.
+    """
+
+    def __init__(self, *args: Any, max_file_size: int, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.max_file_size = max_file_size
+        self._file_bytes: dict[int, int] = {}
+
+    def on_part_data(self, data: bytes, start: int, end: int) -> None:
+        part: MultipartPart = self._current_part
+        if part.file is not None:
+            seen = self._file_bytes.get(id(part), 0) + (end - start)
+            if seen > self.max_file_size:
+                raise _FilePartTooLarge(part.file.filename or "")
+            self._file_bytes[id(part)] = seen
+        super().on_part_data(data, start, end)
+
+
 async def _parse_upload(request: Request, settings: Settings) -> FormData:
     """Parse the multipart body under limits that apply while it is read."""
     if "multipart/form-data" not in request.headers.get("Content-Type", ""):
@@ -179,15 +210,23 @@ async def _parse_upload(request: Request, settings: Settings) -> FormData:
     if declared and declared.isdigit() and int(declared) > maximum:
         raise _body_too_large(int(declared), maximum)
 
-    parser = MultiPartParser(
+    parser = _BoundedMultiPartParser(
         request.headers,
         _capped_stream(request, maximum),
         max_files=settings.max_files_per_upload,
         max_fields=MAX_FORM_FIELDS,
         max_part_size=MAX_TEXT_PART_BYTES,
+        max_file_size=settings.max_upload_mb * 1024 * 1024,
     )
     try:
         return await parser.parse()
+    except _FilePartTooLarge as exc:
+        raise DomainError(
+            "UPLOAD_FILE_TOO_LARGE",
+            status_code=413,
+            filename=exc.filename,
+            max_mb=settings.max_upload_mb,
+        ) from exc
     except MultiPartException as exc:
         if "Too many files" in str(exc):
             # The parser stops counting at the limit, so this is a floor.

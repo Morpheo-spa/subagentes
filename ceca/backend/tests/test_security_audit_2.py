@@ -14,9 +14,11 @@ from typing import Any
 import pytest
 from sqlalchemy import select
 
+from app import main as app_main
 from app.cookies import REFRESH_COOKIE
 from app.errors import DomainError
 from app.models.tenancy import User, UserSite
+from app.routers import documents as documents_router
 from app.security import hash_password, verify_password
 from app.services.storage import s3
 from app.services.storage.validation import (
@@ -270,3 +272,161 @@ def test_check_env_rejects_private_storage_endpoints() -> None:
     assert module.check_storage_egress({"ALLOW_PRIVATE_STORAGE_ENDPOINTS": "true"})
     assert not module.check_storage_egress({"ALLOW_PRIVATE_STORAGE_ENDPOINTS": "false"})
     assert not module.check_storage_egress({})
+
+
+# --- N-07: a file part is cut off at the limit, not spooled and then refused ----
+
+
+class _Channel:
+    """An ASGI receive channel that serves the body in chunks and counts them."""
+
+    def __init__(self, data: bytes, chunk: int) -> None:
+        self._chunks = [data[i : i + chunk] for i in range(0, len(data), chunk)]
+        self.served = 0
+
+    async def __call__(self) -> dict[str, Any]:
+        if not self._chunks:
+            return {"type": "http.disconnect"}
+        body = self._chunks.pop(0)
+        self.served += len(body)
+        return {"type": "http.request", "body": body, "more_body": bool(self._chunks)}
+
+
+def _multipart_file(filename: str, data: bytes) -> tuple[bytes, str]:
+    boundary = "estampa-boundary"
+    body = (
+        (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="files"; filename="{filename}"\r\n'
+            "Content-Type: application/pdf\r\n\r\n"
+        ).encode()
+        + data
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
+    return body, f"multipart/form-data; boundary={boundary}"
+
+
+async def test_a_file_part_over_the_limit_stops_the_stream_at_the_limit() -> None:
+    """Before: a 500 MB part hit the disk in full, and was refused afterwards."""
+    from starlette.requests import Request
+
+    from app.config import get_settings
+
+    body, content_type = _multipart_file("enorme.pdf", b"x" * (6 * 1024 * 1024))
+    channel = _Channel(body, chunk=64 * 1024)
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/documents/",
+            "headers": [(b"content-type", content_type.encode())],
+        },
+        channel,
+    )
+    # Ten files of 1 MB are allowed, so the body cap (11 MB) is not what trips.
+    limits = get_settings().model_copy(update={"max_files_per_upload": 10, "max_upload_mb": 1})
+
+    with pytest.raises(DomainError) as raised:
+        await documents_router._parse_upload(request, limits)
+
+    assert raised.value.code == "UPLOAD_FILE_TOO_LARGE"
+    assert raised.value.params == {"filename": "enorme.pdf", "max_mb": 1}
+    assert channel.served < 2 * 1024 * 1024, f"{channel.served} bytes were read past the limit"
+
+
+async def test_a_file_at_the_limit_still_parses() -> None:
+    from starlette.requests import Request
+
+    from app.config import get_settings
+
+    body, content_type = _multipart_file("justo.pdf", b"%PDF-1.4" + b"x" * (1024 * 1024 - 8))
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/documents/",
+            "headers": [(b"content-type", content_type.encode())],
+        },
+        _Channel(body, chunk=64 * 1024),
+    )
+    limits = get_settings().model_copy(update={"max_files_per_upload": 10, "max_upload_mb": 1})
+
+    form = await documents_router._parse_upload(request, limits)
+    try:
+        (upload,) = form.getlist("files")
+        assert upload.filename == "justo.pdf"  # type: ignore[union-attr]
+    finally:
+        await form.close()
+
+
+# --- N-08: no DNS on the event loop -----------------------------------------------
+
+
+def test_the_adapters_check_a_name_without_resolving_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    import socket
+
+    def no_dns(*_: Any, **__: Any) -> Any:
+        raise AssertionError("getaddrinfo must not run on the request path")
+
+    monkeypatch.setattr(socket, "getaddrinfo", no_dns)
+    assert validate_endpoint_url("https://bucket.example.net:9000", resolve=False)
+    assert validate_host("ftp.example.net", 21, resolve=False) == ("ftp.example.net", 21)
+    # A literal address needs no lookup and is still refused.
+    with pytest.raises(DomainError):
+        validate_endpoint_url("http://10.0.0.5:9000", resolve=False)
+
+
+async def test_saving_a_backend_resolves_in_a_worker_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import socket
+    import threading
+
+    from app.services.storage.validation import validate_config_offloaded
+
+    seen: list[str] = []
+
+    def record(host: str, *_: Any, **__: Any) -> list[Any]:
+        seen.append(threading.current_thread().name)
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 0))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", record)
+    checked = await validate_config_offloaded("s3", {"endpoint_url": "https://s3.example.net"})
+
+    assert checked["endpoint_url"] == "https://s3.example.net"
+    assert seen and seen[0] != threading.main_thread().name
+
+
+def test_the_storage_router_never_calls_the_blocking_validator() -> None:
+    source = (Path(__file__).resolve().parents[1] / "app" / "routers" / "storage.py").read_text()
+    assert "validate_config_offloaded(" in source
+    assert " validate_config(" not in source
+
+
+# --- N-11: X-Request-ID is ours to bound -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    "offered",
+    [
+        pytest.param("x" * 65, id="too-long"),
+        pytest.param("id with spaces", id="spaces"),
+        pytest.param("id\tline", id="control"),
+        pytest.param("ünïcode", id="non-ascii"),
+        pytest.param("", id="empty"),
+    ],
+)
+def test_an_unacceptable_request_id_is_replaced(offered: str) -> None:
+    accepted = app_main._accepted_request_id(offered)
+    assert accepted != offered
+    assert len(accepted) == 32
+
+
+def test_a_reasonable_request_id_is_kept() -> None:
+    assert app_main._accepted_request_id("req-2026.09.19_abc") == "req-2026.09.19_abc"
+
+
+async def test_the_response_echoes_only_a_bounded_request_id(client: Any) -> None:
+    response = await client.get("/health/live", headers={"X-Request-ID": "y" * 4096})
+    assert response.status_code == 200
+    assert len(response.headers["X-Request-ID"]) == 32

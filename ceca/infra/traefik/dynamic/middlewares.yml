@@ -7,11 +7,20 @@ http:
     # while the body streams in; this stops an oversized body from reaching the
     # process at all. Keep it above the application's own ceiling, never below,
     # or a legitimate batch is cut off at the edge with an opaque error.
+    # 501 MB is the API's own ceiling (100 files x 5 MB + 1 MB of form
+    # overhead); this sits just above it. It used to be 600 MB, a hundred
+    # megabytes of nothing that Traefik would still spool to disk.
     upload-body-limit:
       buffering:
-        maxRequestBodyBytes: 629145600
+        maxRequestBodyBytes: 530579456
         memRequestBodyBytes: 1048576
         retryExpression: "IsNetworkError() && Attempts() < 2"
+
+    # Bodies are bounded per request; this bounds how many of them one client
+    # can have in flight, so the disk both proxies spool to is bounded too.
+    api-inflight:
+      inFlightReq:
+        amount: 32
 
     security-headers:
       headers:

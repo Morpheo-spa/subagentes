@@ -17,6 +17,8 @@ are ever used:
 
 from __future__ import annotations
 
+import asyncio
+import functools
 import ipaddress
 import socket
 from pathlib import Path
@@ -54,7 +56,7 @@ def _resolved_addresses(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv
     return [ipaddress.ip_address(info[4][0]) for info in infos]
 
 
-def validate_endpoint_url(url: str | None) -> str | None:
+def validate_endpoint_url(url: str | None, *, resolve: bool = True) -> str | None:
     """Refuse an endpoint that points anywhere but the public internet.
 
     Every address the host resolves to is checked, not just the first: a name
@@ -62,6 +64,12 @@ def validate_endpoint_url(url: str | None) -> str | None:
 
     Private addresses are allowed only when the deployment says so, which is how
     a local MinIO or a self-hosted Garage on the same network stays usable.
+
+    ``resolve=False`` skips the DNS lookup and checks only what needs no
+    network: scheme, port, and a literal address. That is the form the storage
+    adapters use on every request (they run on the event loop, and
+    ``getaddrinfo`` blocks it - audit N-08); the lookup itself happens once,
+    when the backend is saved, through :func:`validate_config_offloaded`.
     """
     if not url:
         return None
@@ -79,20 +87,20 @@ def validate_endpoint_url(url: str | None) -> str | None:
     if settings.allow_private_storage_endpoints:
         return url
 
-    try:
-        literal = ipaddress.ip_address(parts.hostname)
-    except ValueError:
-        addresses = _resolved_addresses(parts.hostname)
-    else:
-        addresses = [literal]
-
-    for address in addresses:
+    for address in _addresses_of(parts.hostname, resolve):
         if _is_forbidden(address):
             raise DomainError("STORAGE_ENDPOINT_NOT_PUBLIC", host=parts.hostname)
     return url
 
 
-def validate_host(host: str | None, port: object) -> tuple[str, int]:
+def _addresses_of(host: str, resolve: bool) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    try:
+        return [ipaddress.ip_address(host.strip("[]"))]
+    except ValueError:
+        return _resolved_addresses(host) if resolve else []
+
+
+def validate_host(host: str | None, port: object, *, resolve: bool = True) -> tuple[str, int]:
     """The FTP twin of :func:`validate_endpoint_url`: a host and a port.
 
     Same rule, same reason. Without it the FTP adapter was the door the S3
@@ -112,13 +120,7 @@ def validate_host(host: str | None, port: object) -> tuple[str, int]:
     if settings.allow_private_storage_endpoints:
         return host, port_number
 
-    try:
-        literal = ipaddress.ip_address(host.strip("[]"))
-    except ValueError:
-        addresses = _resolved_addresses(host)
-    else:
-        addresses = [literal]
-    for address in addresses:
+    for address in _addresses_of(host, resolve):
         if _is_forbidden(address):
             raise DomainError("STORAGE_ENDPOINT_NOT_PUBLIC", host=host)
     return host, port_number
@@ -147,18 +149,20 @@ def validate_base_path(base_path: str | None) -> str:
     return str(candidate)
 
 
-def validate_config(kind: str, config: dict[str, object]) -> dict[str, object]:
+def validate_config(
+    kind: str, config: dict[str, object], *, resolve: bool = True
+) -> dict[str, object]:
     """Normalise and check the non-secret half of a backend's settings."""
     checked = dict(config)
     if kind == "s3":
         endpoint = checked.get("endpoint_url")
         checked["endpoint_url"] = validate_endpoint_url(
-            endpoint if isinstance(endpoint, str) else None
+            endpoint if isinstance(endpoint, str) else None, resolve=resolve
         )
     if kind == "ftp":
         raw_host = checked.get("host")
         host, port = validate_host(
-            raw_host if isinstance(raw_host, str) else None, checked.get("port")
+            raw_host if isinstance(raw_host, str) else None, checked.get("port"), resolve=resolve
         )
         checked["host"] = host
         checked["port"] = port
@@ -166,3 +170,12 @@ def validate_config(kind: str, config: dict[str, object]) -> dict[str, object]:
         raw = checked.get("base_path")
         checked["base_path"] = validate_base_path(raw if isinstance(raw, str) else None)
     return checked
+
+
+async def validate_config_offloaded(kind: str, config: dict[str, object]) -> dict[str, object]:
+    """:func:`validate_config` with the DNS lookup in a worker thread.
+
+    This is the one place that resolves names: when a tenant saves a backend.
+    A slow or dead resolver then costs that request, not the event loop.
+    """
+    return await asyncio.to_thread(functools.partial(validate_config, kind, config, resolve=True))

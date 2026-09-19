@@ -253,3 +253,28 @@ def test_check_env_accepts_the_shipped_production_proxy_config() -> None:
     problems = check_env.check_tls({"TRAEFIK_STATIC_CONFIG": str(TRAEFIK_STATIC)}, REPO_ROOT)
 
     assert problems == [f"{TRAEFIK_STATIC.name}: the ACME contact is still the example address"]
+
+
+# --- N-07: what the edge spools is bounded too ---------------------------------
+
+
+def test_the_api_router_caps_requests_in_flight_and_spools_to_a_bounded_tmpfs() -> None:
+    import yaml
+
+    dynamic = yaml.safe_load(
+        (REPO_ROOT / "infra" / "traefik" / "dynamic" / "middlewares.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    middlewares = dynamic["http"]["middlewares"]
+    assert middlewares["api-inflight"]["inFlightReq"]["amount"] <= 64
+    body_limit = middlewares["upload-body-limit"]["buffering"]["maxRequestBodyBytes"]
+    api_ceiling = (100 * 5 + 1) * 1024 * 1024
+    assert api_ceiling < body_limit <= api_ceiling + 64 * 1024 * 1024
+
+    compose = yaml.safe_load((REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    api = compose["services"]["api"]
+    labels = "\n".join(api["labels"])
+    assert "api-inflight@file" in labels
+    spool = "/" + "tmp:size="  # noqa: S108 - a compose mount spec, not a path we open
+    assert any(mount.startswith(spool) for mount in api["tmpfs"])

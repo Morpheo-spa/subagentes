@@ -102,10 +102,12 @@ class S3Storage:
         self._bucket = config.get("bucket", "")
         self._prefix = (config.get("prefix") or "").strip("/")
         # Re-checked here, not only at write time: the row may predate the check,
-        # or have been edited by a path that forgot it.
+        # or have been edited by a path that forgot it. Without DNS: this runs
+        # on the event loop for every request, and the name was resolved and
+        # checked when the row was saved.
         self._client_kwargs: dict[str, Any] = {
             "region_name": config.get("region"),
-            "endpoint_url": validate_endpoint_url(config.get("endpoint_url")),
+            "endpoint_url": validate_endpoint_url(config.get("endpoint_url"), resolve=False),
             "config": _client_config(bool(config.get("force_path_style"))),
         }
         self._session = _session(credentials_of(backend))

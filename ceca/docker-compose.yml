@@ -122,6 +122,11 @@ services:
     # included: scripts/check_env.py checks them against POSTGRES_PASSWORD and
     # REDIS_PASSWORD so the two halves cannot drift apart.
     env_file: .env
+    # Uploads spool to /tmp while they are parsed. A bounded tmpfs keeps a
+    # burst of them from filling the host's disk: it fills this mount, and
+    # only the offending requests fail.
+    tmpfs:
+      - /tmp:size=1073741824,mode=1777
     expose:
       - "8000"
     # Readiness, not liveness: /health/ready answers 503 until Postgres, Redis
@@ -146,7 +151,7 @@ services:
       - traefik.http.routers.estampa-api.entrypoints=web,websecure
       - traefik.http.routers.estampa-api.priority=100
       - traefik.http.routers.estampa-api.service=estampa-api
-      - traefik.http.routers.estampa-api.middlewares=security-headers@file,api-ratelimit@file,upload-body-limit@file
+      - traefik.http.routers.estampa-api.middlewares=security-headers@file,api-ratelimit@file,api-inflight@file,upload-body-limit@file
       # The public QR viewer: same service, stricter headers, never indexed.
       # A browser opening a scanned QR sends Accept: text/html and must land on the
       # SPA's viewer page (frontend router below). The page then fetches the same

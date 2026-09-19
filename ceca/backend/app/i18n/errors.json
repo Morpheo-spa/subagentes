@@ -325,6 +325,10 @@
       "es": "El fichero «{filename}» lleva metadatos ({fields}) que verá cualquiera que escanee el QR. No los modificamos: el fichero es el original del cliente.",
       "en": "The file '{filename}' carries metadata ({fields}) visible to anyone who scans the QR. We do not modify it: the file is the client's original."
     },
+    "UPLOAD_FILE_TOO_LARGE": {
+      "es": "«{filename}» supera los {max_mb} MB y se ha cortado la subida. Quítalo y vuelve a intentarlo.",
+      "en": "\"{filename}\" exceeds {max_mb} MB and the upload was cut off. Remove it and try again."
+    },
     "UPLOAD_BODY_TOO_LARGE": {
       "es": "El envío ocupa {size_mb} MB y el máximo por petición es {max_mb} MB.",
       "en": "The request body is {size_mb} MB; the maximum per request is {max_mb} MB."

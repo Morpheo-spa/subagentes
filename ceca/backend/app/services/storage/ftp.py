@@ -30,7 +30,9 @@ class FtpStorage:
         credentials = credentials_of(backend)
         self._name = backend.name
         # Re-checked here, as the S3 adapter does: the row may predate the check.
-        self._host, self._port = validate_host(config.get("host"), config.get("port"))
+        self._host, self._port = validate_host(
+            config.get("host"), config.get("port"), resolve=False
+        )
         self._base_path = (config.get("base_path") or "").strip("/")
         self._use_tls = bool(config.get("tls"))
         self._user = credentials.get("username") or config.get("username") or "anonymous"

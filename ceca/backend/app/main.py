@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import tempfile
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
@@ -41,13 +42,24 @@ logger = logging.getLogger("estampa")
 settings = get_settings()
 
 
+#: What a client may hand us as a correlation id: short, and nothing a log
+#: line or a header could misread. Anything else is replaced, not rejected.
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def _accepted_request_id(offered: str | None) -> str:
+    if offered and REQUEST_ID_PATTERN.match(offered):
+        return offered
+    return uuid.uuid4().hex
+
+
 class RequestIdMiddleware(BaseHTTPMiddleware):
     """Tags every request so a user-visible error can be traced in the logs."""
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
+        request_id = _accepted_request_id(request.headers.get("X-Request-ID"))
         request.state.request_id = request_id
         # Every log line written while this request runs carries the id.
         token = request_id_var.set(request_id)

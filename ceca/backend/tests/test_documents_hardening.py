@@ -441,7 +441,12 @@ async def test_a_declared_body_over_the_limit_is_refused_without_reading_it() ->
 
 
 async def test_an_undeclared_body_over_the_limit_is_cut_off_as_it_arrives() -> None:
-    """``Content-Length`` is a claim. A chunked body has none, and lying is free."""
+    """``Content-Length`` is a claim. A chunked body has none, and lying is free.
+
+    The body arrives here as a single chunk, so the request-wide counter trips
+    before the parser sees the part. The chunked case, where the per-file
+    ceiling trips first, is in ``test_security_audit_2.py`` (audit N-07).
+    """
     body, content_type = _multipart([("files", "grande.pdf", b"x" * (3 * 1024 * 1024))])
     request, _ = _request(body, content_type, declare_length=False)
 
