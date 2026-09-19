@@ -82,15 +82,16 @@ function UsersTab() {
             <TableCell className="font-medium">{user.full_name}</TableCell>
             <TableCell>{user.email}</TableCell>
             <TableCell>
+              {/* Un rol por insignia, aunque se tenga en varios centros: la
+                  columna de centros ya dice donde. */}
               <span className="flex flex-wrap gap-1">
-                {user.memberships.map((membership) => (
-                  <Badge
-                    key={membership.id}
-                    variant={knownRole(membership.role) ? 'outline' : 'warning'}
-                  >
-                    <code className="estampa-mono">{membership.role}</code>
-                  </Badge>
-                ))}
+                {[...new Set(user.memberships.map((membership) => membership.role))].map(
+                  (role) => (
+                    <Badge key={role} variant={knownRole(role) ? 'outline' : 'warning'}>
+                      <code className="estampa-mono">{role}</code>
+                    </Badge>
+                  ),
+                )}
               </span>
             </TableCell>
             <TableCell>

@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { LanguageSelect } from '@/components/common/language-select'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { FormField, FormLabel, useFormControlProps } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -85,7 +85,8 @@ export default function LoginPage() {
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>{t('auth.title')}</CardTitle>
+          {/* La unica pagina sin app shell: el titulo de la tarjeta es el h1. */}
+          <h1 className="text-lead font-semibold">{t('auth.title')}</h1>
           <CardDescription>{t('auth.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent>

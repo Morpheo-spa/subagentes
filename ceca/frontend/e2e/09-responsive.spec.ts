@@ -15,7 +15,12 @@ const SCREENS: [string, string, string][] = [
   ['/upload', 'Subir PDFs', 'subida'],
   ['/deca/new', 'Generar DeCA', 'generar'],
   ['/printing', 'Cola de impresión', 'cola'],
+  ['/billing', 'Facturación', 'facturacion'],
+  ['/admin', 'Administración', 'admin'],
 ]
+
+/** Pestañas de administración: la lista envuelve en 375, nunca desborda (pages/admin.md). */
+const ADMIN_TABS = ['Centros', 'Usuarios y roles', 'Almacenamiento', 'Retención']
 
 /**
  * 9. Responsive (MASTER §5 y §12): sin scroll horizontal en 375 · 768 · 1024 ·
@@ -58,6 +63,13 @@ test('sin scroll horizontal en ningun ancho; tabla -> cards en 375', async ({ pa
       await expect(page.getByRole('heading', { name: heading, level: 1 })).toBeVisible()
       await page.waitForLoadState('networkidle')
       await noOverflow(`${path} @${width}`)
+      if (path === '/admin') {
+        for (const tab of ADMIN_TABS) {
+          await page.getByRole('tab', { name: tab }).click()
+          await page.waitForLoadState('networkidle')
+          await noOverflow(`/admin#${tab} @${width}`)
+        }
+      }
     }
     // El panel del documento tampoco desborda.
     await page.goto('/documents')
