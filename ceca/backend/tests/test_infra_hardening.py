@@ -278,3 +278,41 @@ def test_the_api_router_caps_requests_in_flight_and_spools_to_a_bounded_tmpfs() 
     assert "api-inflight@file" in labels
     spool = "/" + "tmp:size="  # noqa: S108 - a compose mount spec, not a path we open
     assert any(mount.startswith(spool) for mount in api["tmpfs"])
+
+
+# --- scripts/make_secrets.py: the one secrets command that works on Windows too
+
+
+def test_make_secrets_fills_every_placeholder_consistently(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    target = tmp_path / ".env"
+    target.write_text(ENV_EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
+    script = REPO_ROOT / "scripts" / "make_secrets.py"
+
+    subprocess.run([sys.executable, str(script), str(target)], check=True, capture_output=True)  # noqa: S603
+
+    text = target.read_text(encoding="utf-8")
+    assert not [
+        line
+        for line in text.splitlines()
+        if "CHANGE_ME" in line and "=" in line and not line.startswith("#")
+    ]
+    env = dict(
+        line.split("=", 1)
+        for line in text.splitlines()
+        if line and not line.startswith("#") and "=" in line
+    )
+    # check_env.py is the authority on whether the halves agree.
+    spec = importlib.util.spec_from_file_location(
+        "check_env", REPO_ROOT / "scripts" / "check_env.py"
+    )
+    assert spec is not None and spec.loader is not None
+    check_env = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(check_env)
+    assert check_env.check_redis(env) == []
+    assert check_env.check_postgres(env) == []
+    assert check_env.check_object_store(env) == []
+    assert check_env.check_storage_key(env) == []
+    assert check_env.check_secrets(env) == []

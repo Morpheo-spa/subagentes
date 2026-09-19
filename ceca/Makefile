@@ -21,35 +21,7 @@ env: ## Create .env from the template if it does not exist
 
 .PHONY: secrets
 secrets: env ## Replace the CHANGE_ME placeholders in .env with fresh secrets
-	@$(PY) - <<-'PYCODE'
-	import re, secrets, pathlib
-	from cryptography.fernet import Fernet
-	path = pathlib.Path(".env")
-	text = path.read_text(encoding="utf-8")
-	fill = lambda body, key, value: re.sub(rf"(?m)^{key}=CHANGE_ME.*$$", f"{key}={value}", body)
-	postgres_password = secrets.token_urlsafe(24)
-	redis_password = secrets.token_urlsafe(24)
-	text = fill(text, "JWT_SECRET_KEY", secrets.token_urlsafe(48))
-	text = fill(text, "STORAGE_SECRET_KEY", Fernet.generate_key().decode())
-	text = fill(text, "ACCESS_LOG_IP_SALT", secrets.token_urlsafe(24))
-	text = fill(text, "POSTGRES_PASSWORD", postgres_password)
-	text = fill(text, "REDIS_PASSWORD", redis_password)
-	text = fill(text, "MINIO_ROOT_USER", "estampa-" + secrets.token_hex(4))
-	text = fill(text, "MINIO_ROOT_PASSWORD", secrets.token_urlsafe(24))
-	# The connection URLs carry the same passwords; check_env.py compares them.
-	text = re.sub(
-	    r"(?m)^DATABASE_URL=(postgresql\+asyncpg://[^:@/]+:)CHANGE_ME[^@]*@",
-	    rf"DATABASE_URL=\g<1>{postgres_password}@",
-	    text,
-	)
-	text = re.sub(
-	    r"(?m)^REDIS_URL=(rediss?://[^:@/]*:)CHANGE_ME[^@]*@",
-	    rf"REDIS_URL=\g<1>{redis_password}@",
-	    text,
-	)
-	path.write_text(text, encoding="utf-8")
-	print("secrets written to .env")
-	PYCODE
+	@$(PY) scripts/make_secrets.py .env
 
 .PHONY: up
 up: env ## Start the development stack (base + dev overlay)
